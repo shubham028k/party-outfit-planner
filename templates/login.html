@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if mode == "register" %}अकाउंट बनाएँ{% else %}लॉगिन{% endif %} · LOOKBOOK</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      color: #f7f4ff;
+      background:
+        radial-gradient(ellipse at 80% 15%, rgba(146, 91, 203, .2), transparent 38%),
+        #17152b;
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    .card {
+      width: min(100%, 420px);
+      padding: 34px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 22px;
+      background: #211f38;
+      box-shadow: 0 24px 70px rgba(0,0,0,.35);
+    }
+
+    .brand {
+      margin: 0 0 28px;
+      color: #ff8fb3;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+
+    .eyebrow {
+      margin: 0 0 9px;
+      color: #ff8fb3;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: Georgia, serif;
+      font-size: 34px;
+    }
+
+    .intro {
+      margin: 10px 0 24px;
+      color: #aaa6c3;
+      line-height: 1.6;
+    }
+
+    label {
+      display: block;
+      margin: 16px 0 7px;
+      color: #d9d5e9;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      height: 48px;
+      padding: 0 13px;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 10px;
+      outline: none;
+      color: #f7f4ff;
+      background: #19172d;
+      font: inherit;
+    }
+
+    input:focus {
+      border-color: #b7a2ff;
+      box-shadow: 0 0 0 3px rgba(183,162,255,.12);
+    }
+
+    .error {
+      margin: 14px 0 0;
+      color: #ff8fb3;
+      font-size: 13px;
+    }
+
+    button {
+      width: 100%;
+      height: 48px;
+      margin-top: 22px;
+      border: 0;
+      border-radius: 10px;
+      color: #24192d;
+      background: linear-gradient(100deg, #ff9fbc, #d7a9ff);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .switch {
+      margin: 20px 0 0;
+      color: #aaa6c3;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .switch a {
+      color: #ff8fb3;
+      font-weight: 700;
+      text-decoration: none;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="card">
+    <p class="brand">✳ LOOKBOOK</p>
+
+    {% if mode == "register" %}
+      <p class="eyebrow">START YOUR STYLE JOURNEY</p>
+      <h1>अकाउंट बनाओ</h1>
+      <p class="intro">अपनी अलमारी और पसंदीदा लुक सेव करने के लिए जुड़ो।</p>
+    {% else %}
+      <p class="eyebrow">WELCOME BACK</p>
+      <h1>वापस आओ</h1>
+      <p class="intro">लॉगिन करके अपनी अलमारी और सेव किए लुक खोलो।</p>
+    {% endif %}
+
+    <form method="post"
+      action="{{ url_for('register') if mode == 'register' else url_for('login') }}">
+
+      <label for="username">यूज़रनेम</label>
+      <input id="username" name="username" type="text"
+             minlength="3" maxlength="30" autocomplete="username"
+             placeholder="अपना यूज़रनेम" required>
+
+      <label for="password">पासवर्ड</label>
+      <input id="password" name="password" type="password"
+             minlength="8" autocomplete="{% if mode == 'register' %}new-password{% else %}current-password{% endif %}"
+             placeholder="{% if mode == 'register' %}कम से कम 8 अक्षर{% else %}अपना पासवर्ड{% endif %}"
+             required>
+
+      {% if error %}
+        <p class="error" role="alert">{{ error }}</p>
+      {% endif %}
+
+      <button type="submit">
+        {% if mode == "register" %}अकाउंट बनाएँ{% else %}लॉगिन करें{% endif %}
+      </button>
+    </form>
+
+    {% if mode == "register" %}
+      <p class="switch">पहले से अकाउंट है? <a href="{{ url_for('login') }}">लॉगिन करो</a></p>
+    {% else %}
+      <p class="switch">नए हो? <a href="{{ url_for('register') }}">अकाउंट बनाओ</a></p>
+    {% endif %}
+  </main>
+</body>
+</html>

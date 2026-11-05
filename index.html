@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Party Outfit Planner</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px;
+      display: grid;
+      place-items: center;
+      font-family: Arial, sans-serif;
+      color: #fff;
+      background: linear-gradient(135deg, #20113d, #672b83, #df4b85);
+    }
+
+    .card {
+      width: min(100%, 500px);
+      padding: 30px;
+      border: 1px solid #ffffff55;
+      border-radius: 24px;
+      background: #ffffff1c;
+      box-shadow: 0 20px 55px #0005;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      text-align: center;
+    }
+
+    .intro {
+      margin: 0 0 24px;
+      color: #f7dcf2;
+      text-align: center;
+    }
+
+    label {
+      display: block;
+      margin: 16px 0 7px;
+      font-weight: bold;
+    }
+
+    select,
+    button {
+      width: 100%;
+      padding: 13px;
+      border: 0;
+      border-radius: 11px;
+      font-size: 16px;
+    }
+
+    select {
+      color: #251638;
+      background: #fff;
+    }
+
+    button {
+      margin-top: 23px;
+      color: #321542;
+      background: #ffe16b;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #ffd33d;
+    }
+
+    #result {
+      display: none;
+      margin-top: 22px;
+      padding: 17px;
+      border-radius: 15px;
+      color: #281736;
+      background: #fff;
+      line-height: 1.6;
+    }
+
+    #result h2 {
+      margin: 0 0 10px;
+    }
+
+    #result p {
+      margin: 8px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="card">
+    <h1>🎉 Party Outfit Planner</h1>
+    <p class="intro">पार्टी चुनो और अपने लिए एक शानदार लुक पाओ।</p>
+
+    <label for="party">किस पार्टी में जा रहे हो?</label>
+    <select id="party">
+      <option value="birthday">बर्थडे पार्टी</option>
+      <option value="wedding">शादी की पार्टी</option>
+      <option value="casual">कैज़ुअल पार्टी</option>
+      <option value="night">नाइट पार्टी</option>
+    </select>
+
+    <label for="weather">मौसम कैसा है?</label>
+    <select id="weather">
+      <option value="hot">गर्म</option>
+      <option value="cold">ठंडा</option>
+      <option value="rain">बारिश</option>
+    </select>
+
+    <button onclick="showOutfit()">मेरा पार्टी लुक बताओ ✨</button>
+
+    <section id="result" aria-live="polite"></section>
+  </main>
+
+  <script>
+    function showOutfit() {
+      const party = document.getElementById("party").value;
+      const weather = document.getElementById("weather").value;
+
+      const looks = {
+        birthday: {
+          shirt: "हल्के रंग की स्मार्ट कैज़ुअल शर्ट",
+          pants: "डार्क ब्लू जींस या चिनोज़",
+          shoes: "साफ़ सफ़ेद स्नीकर्स"
+        },
+        wedding: {
+          shirt: "कुर्ता या अच्छी फॉर्मल शर्ट",
+          pants: "फॉर्मल ट्राउज़र",
+          shoes: "लोफ़र्स या फॉर्मल जूते"
+        },
+        casual: {
+          shirt: "आरामदायक टी-शर्ट",
+          pants: "अपनी पसंदीदा जींस",
+          shoes: "आरामदायक स्नीकर्स"
+        },
+        night: {
+          shirt: "ब्लैक या गहरे रंग की स्टाइलिश शर्ट",
+          pants: "ब्लैक जींस",
+          shoes: "डार्क स्नीकर्स या बूट्स"
+        }
+      };
+
+      const look = looks[party];
+      let weatherTip = "";
+
+      if (weather === "cold") {
+        weatherTip = "🧥 ठंड है, इसलिए साथ में जैकेट पहन लो।";
+      } else if (weather === "rain") {
+        weatherTip = "🌧️ बारिश के लिए आरामदायक, पानी से कम खराब होने वाले जूते चुनो।";
+      } else {
+        weatherTip = "☀️ गर्मी में हल्के और आरामदायक कपड़े पहनना।";
+      }
+
+      const result = document.getElementById("result");
+      result.innerHTML = `
+        <h2>तुम्हारा पार्टी लुक 👔</h2>
+        <p>👕 <strong>शर्ट:</strong> ${look.shirt}</p>
+        <p>👖 <strong>पैंट:</strong> ${look.pants}</p>
+        <p>👟 <strong>जूते:</strong> ${look.shoes}</p>
+        <p>${weatherTip}</p>
+      `;
+      result.style.display = "block";
+    }
+  </script>
+</body>
+</html>
