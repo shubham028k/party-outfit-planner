@@ -287,6 +287,62 @@ let appLanguage = localStorage.getItem("lookbook-language") || "hi";
 
 const englishText = {
   "पुरुष": "Men", "महिला": "Women",
+  "बच्चे": "Children", "बुज़ुर्ग": "Older adult",
+  "आरामदायक इलास्टिक-कमर शॉर्ट्स": "Comfortable elastic-waist shorts",
+  "आरामदायक उत्सवी कुर्ता": "Comfortable festive kurta",
+  "आरामदायक एथनिक जूते": "Comfortable ethnic shoes",
+  "आरामदायक कार्गो ट्राउज़र": "Comfortable cargo trousers",
+  "आरामदायक कॉटन टी-शर्ट": "Comfortable cotton T-shirt",
+  "आरामदायक कॉटन ट्राउज़र": "Comfortable cotton trousers",
+  "आरामदायक कॉटन शॉर्ट्स": "Comfortable cotton shorts",
+  "आरामदायक कॉलर वाली शर्ट": "Comfortable collared shirt",
+  "आरामदायक चिनो ट्राउज़र": "Comfortable chino trousers",
+  "आरामदायक जूती": "Comfortable jutti",
+  "आरामदायक पायजामा": "Comfortable pajama trousers",
+  "आरामदायक लो-टॉप स्नीकर्स": "Comfortable low-top sneakers",
+  "आसान फिटिंग वाले ट्राउज़र": "Easy-fit trousers",
+  "इलास्टिक-कमर वाले ट्राउज़र": "Elastic-waist trousers",
+  "कुशन वाले फ्लैट एथनिक जूते": "Cushioned flat ethnic shoes",
+  "कुशन वाले फ्लैट जूते": "Cushioned flat shoes",
+  "कुशन वाले लो-हील जूते": "Cushioned low-heel shoes",
+  "कुशन वाले स्नीकर्स": "Cushioned sneakers",
+  "कॉलर वाली कॉटन शर्ट": "Collared cotton shirt",
+  "कॉलर वाली गहरे रंग की शर्ट": "Collared dark-colored shirt",
+  "गहरे रंग का सांस लेने वाला टॉप": "Breathable dark-colored top",
+  "गहरे रंग की आरामदायक टी-शर्ट": "Comfortable dark-colored T-shirt",
+  "ग्रिप वाले आरामदायक जूते": "Comfortable shoes with grip",
+  "ग्रिप वाले एथनिक जूते": "Ethnic shoes with grip",
+  "ग्रिप वाले फ्लैट जूते": "Flat shoes with grip",
+  "ग्रिप वाले लो-हील जूते": "Low-heel shoes with grip",
+  "ग्रिप वाले स्नीकर्स": "Sneakers with grip",
+  "प्रिंटेड शर्ट": "Printed shirt",
+  "मज़ेदार प्रिंट वाली टी-शर्ट": "Fun printed T-shirt",
+  "रंगीन आरामदायक उत्सवी टॉप": "Colorful comfortable festive top",
+  "रंगीन आरामदायक टॉप": "Colorful comfortable top",
+  "रंगीन उत्सवी कुर्ता": "Colorful festive kurta",
+  "रंगीन कैप": "Colorful cap",
+  "रंगीन कॉटन टी-शर्ट": "Colorful cotton T-shirt",
+  "रंगीन कॉटन शॉर्ट्स": "Colorful cotton shorts",
+  "रंगीन प्रिंट वाली शर्ट": "Colorful printed shirt",
+  "लिनेन शर्ट या ट्यूनिक": "Linen shirt or tunic",
+  "सांस लेने वाला उत्सवी कुर्ता या ट्यूनिक": "Breathable festive kurta or tunic",
+  "सांस लेने वाला सूती टॉप": "Breathable cotton top",
+  "सांस लेने वाली कॉटन टी-शर्ट": "Breathable cotton T-shirt",
+  "साफ़-सुथरा उत्सवी कुर्ता": "Neat festive kurta",
+  "सॉफ्ट कॉटन ट्राउज़र": "Soft cotton trousers",
+  "सॉफ्ट-फिट चिनो शॉर्ट्स": "Soft-fit chino shorts",
+  "सॉफ्ट-फिट ट्राउज़र": "Soft-fit trousers",
+  "सॉफ्ट-फिट पायजामा": "Soft-fit pajama trousers",
+  "सॉफ्ट-फिट शॉर्ट्स": "Soft-fit shorts",
+  "हल्का उत्सवी कुर्ता": "Lightweight festive kurta",
+  "हल्का स्कार्फ": "Lightweight scarf",
+  "हल्का स्टोल": "Lightweight stole",
+  "हल्का स्वेटर": "Lightweight sweater",
+  "हल्की कैप": "Lightweight cap",
+  "हल्की घड़ी": "Lightweight watch",
+  "हल्की जैकेट": "Lightweight jacket",
+  "हल्की नेहरू जैकेट": "Lightweight Nehru jacket",
+  "हल्के कॉटन शॉर्ट्स": "Lightweight cotton shorts",
   "बर्थडे पार्टी": "Birthday party", "शादी की पार्टी": "Wedding party",
   "कैज़ुअल पार्टी": "Casual party", "नाइट पार्टी": "Night party",
   "कैज़ुअल": "Casual", "स्मार्ट": "Smart", "बोल्ड": "Bold",
@@ -384,7 +440,13 @@ const englishText = {
 
   "ठंड के लिए जैकेट या ब्लेज़र साथ रखें।": "Bring a jacket or blazer for cold weather.",
   "बारिश में पानी से कम खराब होने वाले जूते चुनें।": "Choose shoes that can handle rain.",
-  "गर्मी में हल्के और आरामदायक कपड़े चुनें।": "Choose light, comfortable clothes for warm weather."
+  "गर्मी में हल्के और आरामदायक कपड़े चुनें।": "Choose light, comfortable clothes for warm weather.",
+  "बच्चे के लिए आरामदायक गर्म परतें साथ रखें।": "Bring comfortable warm layers for the child.",
+  "बारिश में बच्चे के लिए ग्रिप वाले, पानी से बचाने वाले जूते चुनें।": "For rainy weather, choose water-resistant shoes with grip for the child.",
+  "गर्मी में बच्चे के लिए हल्के, सांस लेने वाले कपड़े चुनें।": "Choose light, breathable clothes for the child in warm weather.",
+  "ठंड में आरामदायक, हल्की परतें रखें जिन्हें आसानी से पहना जा सके।": "Choose comfortable, lightweight layers that are easy to put on in cold weather.",
+  "बारिश में ग्रिप वाले, आरामदायक जूते चुनें।": "Choose comfortable shoes with grip for rainy weather.",
+  "गर्मी में हल्के, सांस लेने वाले और आरामदायक कपड़े चुनें।": "Choose light, breathable, comfortable clothes for warm weather."
 };
 
 function translateText(text) {
@@ -444,6 +506,8 @@ function applyPageLanguage() {
   setOption('#partyType option[value="night"]', "🌙 Night party");
   setOption('#audience option[value="men"]', "Men");
   setOption('#audience option[value="women"]', "Women");
+  setOption('#audience option[value="children"]', "Children");
+  setOption('#audience option[value="senior"]', "Older adult");
   setOption('#style option[value="casual"]', "Relaxed and casual");
   setOption('#style option[value="smart"]', "Smart and classic");
   setOption('#style option[value="bold"]', "Bold and trendy");

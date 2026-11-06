@@ -146,7 +146,9 @@ WOMEN_OUTFITS = {
 
 AUDIENCE_NAMES = {
     "men": "पुरुष",
-    "women": "महिला"
+    "women": "महिला",
+    "children": "बच्चे",
+    "senior": "बुज़ुर्ग"
 }
 
 BOTTOM_NAMES = {
@@ -164,6 +166,63 @@ SHORTS_OUTFITS = {
         "casual": "डेनिम शॉर्ट्स",
         "smart": "टेलर्ड शॉर्ट्स",
         "bold": "हाई-वेस्ट शॉर्ट्स"
+    },
+    "children": {
+        "casual": "आरामदायक कॉटन शॉर्ट्स",
+        "smart": "सॉफ्ट-फिट चिनो शॉर्ट्स",
+        "bold": "रंगीन कॉटन शॉर्ट्स"
+    },
+    "senior": {
+        "casual": "हल्के कॉटन शॉर्ट्स",
+        "smart": "आरामदायक इलास्टिक-कमर शॉर्ट्स",
+        "bold": "सॉफ्ट-फिट शॉर्ट्स"
+    }
+}
+
+AGE_GROUP_OUTFITS = {
+    "children": {
+        "birthday": {
+            "casual": ["रंगीन कॉटन टी-शर्ट", "सॉफ्ट कॉटन ट्राउज़र", "ग्रिप वाले स्नीकर्स", "हल्की कैप"],
+            "smart": ["आरामदायक कॉलर वाली शर्ट", "सॉफ्ट-फिट ट्राउज़र", "आरामदायक स्नीकर्स", "हल्की जैकेट"],
+            "bold": ["मज़ेदार प्रिंट वाली टी-शर्ट", "आरामदायक कॉटन ट्राउज़र", "ग्रिप वाले स्नीकर्स", "रंगीन कैप"]
+        },
+        "wedding": {
+            "casual": ["हल्का उत्सवी कुर्ता", "आरामदायक पायजामा", "ग्रिप वाले एथनिक जूते", "हल्की नेहरू जैकेट"],
+            "smart": ["साफ़-सुथरा उत्सवी कुर्ता", "सॉफ्ट-फिट पायजामा", "आरामदायक एथनिक जूते", "हल्की जैकेट"],
+            "bold": ["रंगीन उत्सवी कुर्ता", "सॉफ्ट कॉटन ट्राउज़र", "आरामदायक जूती", "हल्की जैकेट"]
+        },
+        "casual": {
+            "casual": ["आरामदायक कॉटन टी-शर्ट", "सॉफ्ट कॉटन ट्राउज़र", "ग्रिप वाले स्नीकर्स", "हल्की कैप"],
+            "smart": ["कॉलर वाली कॉटन शर्ट", "आरामदायक चिनो ट्राउज़र", "आरामदायक लो-टॉप स्नीकर्स", "हल्का स्वेटर"],
+            "bold": ["प्रिंटेड शर्ट", "आरामदायक कार्गो ट्राउज़र", "ग्रिप वाले स्नीकर्स", "रंगीन कैप"]
+        },
+        "night": {
+            "casual": ["गहरे रंग की आरामदायक टी-शर्ट", "सॉफ्ट कॉटन ट्राउज़र", "आरामदायक स्नीकर्स", "हल्की जैकेट"],
+            "smart": ["कॉलर वाली गहरे रंग की शर्ट", "सॉफ्ट-फिट ट्राउज़र", "आरामदायक लो-टॉप स्नीकर्स", "हल्का स्वेटर"],
+            "bold": ["रंगीन प्रिंट वाली शर्ट", "आरामदायक कार्गो ट्राउज़र", "ग्रिप वाले स्नीकर्स", "रंगीन कैप"]
+        }
+    },
+    "senior": {
+        "birthday": {
+            "casual": ["सांस लेने वाला सूती टॉप", "इलास्टिक-कमर वाले ट्राउज़र", "कुशन वाले फ्लैट जूते", "हल्की घड़ी"],
+            "smart": ["लिनेन शर्ट या ट्यूनिक", "आसान फिटिंग वाले ट्राउज़र", "ग्रिप वाले आरामदायक जूते", "हल्का स्टोल"],
+            "bold": ["रंगीन आरामदायक टॉप", "सॉफ्ट-फिट ट्राउज़र", "कुशन वाले लो-हील जूते", "हल्का स्कार्फ"]
+        },
+        "wedding": {
+            "casual": ["आरामदायक उत्सवी कुर्ता", "सॉफ्ट-फिट पायजामा", "कुशन वाले फ्लैट एथनिक जूते", "हल्का स्टोल"],
+            "smart": ["सांस लेने वाला उत्सवी कुर्ता या ट्यूनिक", "इलास्टिक-कमर वाले ट्राउज़र", "ग्रिप वाले फ्लैट जूते", "हल्का स्टोल"],
+            "bold": ["रंगीन आरामदायक उत्सवी टॉप", "सॉफ्ट-फिट ट्राउज़र", "कुशन वाले फ्लैट जूते", "हल्का स्कार्फ"]
+        },
+        "casual": {
+            "casual": ["सांस लेने वाली कॉटन टी-शर्ट", "इलास्टिक-कमर वाले ट्राउज़र", "कुशन वाले स्नीकर्स", "हल्की घड़ी"],
+            "smart": ["लिनेन शर्ट या ट्यूनिक", "आरामदायक चिनो ट्राउज़र", "ग्रिप वाले लो-हील जूते", "हल्का स्टोल"],
+            "bold": ["रंगीन आरामदायक टॉप", "सॉफ्ट-फिट ट्राउज़र", "कुशन वाले फ्लैट जूते", "हल्का स्कार्फ"]
+        },
+        "night": {
+            "casual": ["गहरे रंग का सांस लेने वाला टॉप", "इलास्टिक-कमर वाले ट्राउज़र", "कुशन वाले फ्लैट जूते", "हल्की जैकेट"],
+            "smart": ["लिनेन शर्ट या ट्यूनिक", "आसान फिटिंग वाले ट्राउज़र", "ग्रिप वाले लो-हील जूते", "हल्का स्टोल"],
+            "bold": ["रंगीन आरामदायक टॉप", "सॉफ्ट-फिट ट्राउज़र", "कुशन वाले फ्लैट जूते", "हल्का स्कार्फ"]
+        }
     }
 }
 
@@ -260,11 +319,22 @@ def analyze_photo():
     ) or "यूज़र की अलमारी में अभी कोई कपड़ा दर्ज नहीं है।"
 
     answer_language = "English" if language == "en" else "Hindi"
+    audience_guidance = {
+        "children": (
+            "Recommend comfortable, age-appropriate clothing and secure, "
+            "well-fitting shoes. Avoid high heels and small detachable accessories."
+        ),
+        "senior": (
+            "Prioritize comfort, breathable layers, easy-to-wear closures, "
+            "and stable flat or low-heel footwear."
+        )
+    }.get(audience, "Use practical, comfortable party styling.")
     prompt = f"""
 You are a practical personal fashion stylist.
 Use the uploaded photo only for visible outfit colors and styling context.
 Do not identify the person or infer age, gender, body shape, skin tone, or identity.
 The user selected this styling category: {AUDIENCE_NAMES[audience]}.
+Styling guidance: {audience_guidance}
 Party: {PARTY_NAMES[party]}
 Style: {STYLE_NAMES[style]}
 Weather: {weather}
@@ -399,7 +469,10 @@ def make_recommendation(
     user_id, party_type, weather, style, audience,
     bottom_preference="trousers"
 ):
-    outfit_options = WOMEN_OUTFITS if audience == "women" else OUTFITS
+    outfit_options = AGE_GROUP_OUTFITS.get(
+        audience,
+        WOMEN_OUTFITS if audience == "women" else OUTFITS
+    )
     defaults = outfit_options[party_type][style]
 
     if bottom_preference == "shorts":
@@ -421,7 +494,19 @@ def make_recommendation(
         "audience_name": AUDIENCE_NAMES[audience]
     }
 
-    if weather == "cold":
+    if audience == "children" and weather == "cold":
+        outfit["weather_tip"] = "बच्चे के लिए आरामदायक गर्म परतें साथ रखें।"
+    elif audience == "children" and weather == "rainy":
+        outfit["weather_tip"] = "बारिश में बच्चे के लिए ग्रिप वाले, पानी से बचाने वाले जूते चुनें।"
+    elif audience == "children":
+        outfit["weather_tip"] = "गर्मी में बच्चे के लिए हल्के, सांस लेने वाले कपड़े चुनें।"
+    elif audience == "senior" and weather == "cold":
+        outfit["weather_tip"] = "ठंड में आरामदायक, हल्की परतें रखें जिन्हें आसानी से पहना जा सके।"
+    elif audience == "senior" and weather == "rainy":
+        outfit["weather_tip"] = "बारिश में ग्रिप वाले, आरामदायक जूते चुनें।"
+    elif audience == "senior":
+        outfit["weather_tip"] = "गर्मी में हल्के, सांस लेने वाले और आरामदायक कपड़े चुनें।"
+    elif weather == "cold":
         outfit["weather_tip"] = "ठंड के लिए जैकेट या ब्लेज़र साथ रखें।"
     elif weather == "rainy":
         outfit["weather_tip"] = "बारिश में पानी से कम खराब होने वाले जूते चुनें।"
