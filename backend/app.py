@@ -1,30 +1,41 @@
 from flask import (
-    Flask, jsonify, render_template, request,
+    Flask, Response, jsonify, render_template, request,
     redirect, url_for, session
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime
 import sqlite3
 import json
 import re
 import os
+import secrets
 from io import BytesIO
 import base64
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlencode, urlsplit
+from urllib.request import Request, urlopen
 from PIL import Image, UnidentifiedImageError
 from openai import OpenAI, OpenAIError
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).with_name(".env"))
+
 app = Flask(__name__)
-app.secret_key = os.environ.get(
-    "SECRET_KEY",
-    "local-dev-key-change-before-deploy"
-)
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax"
+    SESSION_COOKIE_SAMESITE="Lax",
+    MAX_CONTENT_LENGTH=6 * 1024 * 1024
 )
 
-DATABASE = Path(__file__).with_name("outfits.db")
+DEFAULT_DATABASE = Path(__file__).with_name("outfits.db")
+ROOT_DATABASE = Path(__file__).resolve().parents[1] / "outfits.db"
+DATABASE = Path(os.environ.get("DATABASE_PATH", "")).expanduser() if os.environ.get("DATABASE_PATH") else (
+    DEFAULT_DATABASE if DEFAULT_DATABASE.exists() else ROOT_DATABASE
+)
 
 OUTFITS = {
     "birthday": {
@@ -144,15 +155,112 @@ WOMEN_OUTFITS = {
     }
 }
 
+ETHNIC_WOMEN_OUTFITS = {
+    "birthday": {
+        "casual": [
+            "फ्लोरल कुर्ती", "पलाज़ो पैंट", "जूतियाँ", "छोटे झुमके"
+        ],
+        "smart": [
+            "कढ़ाईदार अनारकली सूट", "चूड़ीदार", "एम्बेलिश्ड सैंडल", "झुमके"
+        ],
+        "bold": [
+            "फ्यूज़न लहंगा चोली", "मैचिंग लहंगा स्कर्ट",
+            "एम्बेलिश्ड हील्स", "स्टेटमेंट ज्वेलरी"
+        ]
+    },
+    "wedding": {
+        "casual": [
+            "हल्का उत्सवी सलवार सूट", "चूड़ीदार",
+            "एम्बेलिश्ड सैंडल", "हल्का दुपट्टा"
+        ],
+        "smart": [
+            "साड़ी ब्लाउज़", "साड़ी", "हील्स", "क्लासिक ज्वेलरी"
+        ],
+        "bold": [
+            "लहंगा चोली", "मैचिंग लहंगा स्कर्ट",
+            "एम्बेलिश्ड हील्स", "स्टेटमेंट ज्वेलरी"
+        ]
+    },
+    "casual": {
+        "casual": [
+            "कॉटन कुर्ती", "पलाज़ो पैंट", "आरामदायक जूतियाँ", "छोटे झुमके"
+        ],
+        "smart": [
+            "लिनेन कुर्ता", "स्ट्रेट-फिट ट्राउज़र", "लोफ़र्स", "मिनिमल नेकलेस"
+        ],
+        "bold": [
+            "प्रिंटेड फ्यूज़न कुर्ती", "मैचिंग स्कर्ट",
+            "एम्बेलिश्ड सैंडल", "बोल्ड इयररिंग्स"
+        ]
+    },
+    "night": {
+        "casual": [
+            "सॉफ्ट फैब्रिक कुर्ती", "स्ट्रेट-फिट ट्राउज़र",
+            "आरामदायक सैंडल", "मिनिमल इयररिंग्स"
+        ],
+        "smart": [
+            "साटन साड़ी ब्लाउज़", "साटन साड़ी", "हील्स", "स्टेटमेंट नेकलेस"
+        ],
+        "bold": [
+            "ज्वेल-टोन लहंगा चोली", "मैचिंग लहंगा स्कर्ट",
+            "एम्बेलिश्ड हील्स", "बोल्ड इयररिंग्स"
+        ]
+    }
+}
+
+ETHNIC_DESIGN_TEMPLATES = {
+    "saree": {
+        "title": "साड़ी डिज़ाइन",
+        "details": {
+            "casual": "हल्की कॉटन साड़ी पर छोटे फ्लोरल प्रिंट, पतला कॉन्ट्रास्ट बॉर्डर और आरामदायक मैचिंग ब्लाउज़।",
+            "smart": "सिल्क साड़ी पर नाज़ुक ज़री बॉर्डर, सादा मैचिंग ब्लाउज़ और साफ़-सुथरी प्लीटेड ड्रेप।",
+            "bold": "ज्वेल-टोन साटन साड़ी पर उभरा हुआ एम्बेलिश्ड बॉर्डर और स्टेटमेंट ब्लाउज़।"
+        }
+    },
+    "lehenga": {
+        "title": "लहंगा डिज़ाइन",
+        "details": {
+            "casual": "हल्के फ्लोरल प्रिंट वाला फ्लोई लहंगा, सिंपल चोली और हल्का दुपट्टा।",
+            "smart": "सॉफ्ट शिमर फैब्रिक का फ्लेयर्ड लहंगा, बारीक कढ़ाई वाली चोली और मैचिंग दुपट्टा।",
+            "bold": "ज्वेल-टोन लहंगे पर मिरर या सीक्विन वर्क, आकर्षक चोली और ड्रेप्ड दुपट्टा।"
+        }
+    },
+    "suit": {
+        "title": "सूट डिज़ाइन",
+        "details": {
+            "casual": "सांस लेने वाले कॉटन का स्ट्रेट-कट सूट, हल्का प्रिंट और सॉफ्ट कॉन्ट्रास्ट दुपट्टा।",
+            "smart": "अनारकली कट पर नाज़ुक एम्ब्रॉयडरी, साफ़ चूड़ीदार और हल्का मैचिंग दुपट्टा।",
+            "bold": "रिच ज्वेल-टोन सूट पर कढ़ाईदार नेकलाइन, स्लीव बॉर्डर और मैचिंग दुपट्टा।"
+        }
+    },
+    "kurti": {
+        "title": "कुर्ती डिज़ाइन",
+        "details": {
+            "casual": "सॉफ्ट कॉटन कुर्ती पर छोटे फ्लोरल प्रिंट, आरामदायक पलाज़ो और सिंपल जूतियाँ।",
+            "smart": "लिनेन कुर्ती में साफ़ स्ट्रेट कट, हल्की कढ़ाई और मिनिमल एक्सेसरीज़।",
+            "bold": "कॉन्ट्रास्ट प्रिंट या मिरर-वर्क कुर्ती के साथ फ्लोई स्कर्ट और बोल्ड इयररिंग्स।"
+        }
+    }
+}
+
+ETHNIC_DESIGN_COLORS = {
+    "casual": ["#b85f79", "#f0c5c6", "#d9ad67"],
+    "smart": ["#70436f", "#d5b36a", "#f1dfbd"],
+    "bold": ["#842c52", "#e7b64f", "#3c2946"]
+}
+
 AUDIENCE_NAMES = {
     "men": "पुरुष",
-    "women": "महिला"
+    "women": "महिला",
+    "children": "बच्चे",
+    "senior": "बुज़ुर्ग"
 }
 
 BOTTOM_NAMES = {
     "trousers": "लंबी पैंट",
     "shorts": "शॉर्ट्स"
 }
+OUTFIT_TYPES = {"any", "ethnic"}
 
 SHORTS_OUTFITS = {
     "men": {
@@ -164,6 +272,63 @@ SHORTS_OUTFITS = {
         "casual": "डेनिम शॉर्ट्स",
         "smart": "टेलर्ड शॉर्ट्स",
         "bold": "हाई-वेस्ट शॉर्ट्स"
+    },
+    "children": {
+        "casual": "आरामदायक कॉटन शॉर्ट्स",
+        "smart": "सॉफ्ट-फिट चिनो शॉर्ट्स",
+        "bold": "रंगीन कॉटन शॉर्ट्स"
+    },
+    "senior": {
+        "casual": "हल्के कॉटन शॉर्ट्स",
+        "smart": "आरामदायक इलास्टिक-कमर शॉर्ट्स",
+        "bold": "सॉफ्ट-फिट शॉर्ट्स"
+    }
+}
+
+AGE_GROUP_OUTFITS = {
+    "children": {
+        "birthday": {
+            "casual": ["रंगीन कॉटन टी-शर्ट", "सॉफ्ट कॉटन ट्राउज़र", "ग्रिप वाले स्नीकर्स", "हल्की कैप"],
+            "smart": ["आरामदायक कॉलर वाली शर्ट", "सॉफ्ट-फिट ट्राउज़र", "आरामदायक स्नीकर्स", "हल्की जैकेट"],
+            "bold": ["मज़ेदार प्रिंट वाली टी-शर्ट", "आरामदायक कॉटन ट्राउज़र", "ग्रिप वाले स्नीकर्स", "रंगीन कैप"]
+        },
+        "wedding": {
+            "casual": ["हल्का उत्सवी कुर्ता", "आरामदायक पायजामा", "ग्रिप वाले एथनिक जूते", "हल्की नेहरू जैकेट"],
+            "smart": ["साफ़-सुथरा उत्सवी कुर्ता", "सॉफ्ट-फिट पायजामा", "आरामदायक एथनिक जूते", "हल्की जैकेट"],
+            "bold": ["रंगीन उत्सवी कुर्ता", "सॉफ्ट कॉटन ट्राउज़र", "आरामदायक जूती", "हल्की जैकेट"]
+        },
+        "casual": {
+            "casual": ["आरामदायक कॉटन टी-शर्ट", "सॉफ्ट कॉटन ट्राउज़र", "ग्रिप वाले स्नीकर्स", "हल्की कैप"],
+            "smart": ["कॉलर वाली कॉटन शर्ट", "आरामदायक चिनो ट्राउज़र", "आरामदायक लो-टॉप स्नीकर्स", "हल्का स्वेटर"],
+            "bold": ["प्रिंटेड शर्ट", "आरामदायक कार्गो ट्राउज़र", "ग्रिप वाले स्नीकर्स", "रंगीन कैप"]
+        },
+        "night": {
+            "casual": ["गहरे रंग की आरामदायक टी-शर्ट", "सॉफ्ट कॉटन ट्राउज़र", "आरामदायक स्नीकर्स", "हल्की जैकेट"],
+            "smart": ["कॉलर वाली गहरे रंग की शर्ट", "सॉफ्ट-फिट ट्राउज़र", "आरामदायक लो-टॉप स्नीकर्स", "हल्का स्वेटर"],
+            "bold": ["रंगीन प्रिंट वाली शर्ट", "आरामदायक कार्गो ट्राउज़र", "ग्रिप वाले स्नीकर्स", "रंगीन कैप"]
+        }
+    },
+    "senior": {
+        "birthday": {
+            "casual": ["सांस लेने वाला सूती टॉप", "इलास्टिक-कमर वाले ट्राउज़र", "कुशन वाले फ्लैट जूते", "हल्की घड़ी"],
+            "smart": ["लिनेन शर्ट या ट्यूनिक", "आसान फिटिंग वाले ट्राउज़र", "ग्रिप वाले आरामदायक जूते", "हल्का स्टोल"],
+            "bold": ["रंगीन आरामदायक टॉप", "सॉफ्ट-फिट ट्राउज़र", "कुशन वाले लो-हील जूते", "हल्का स्कार्फ"]
+        },
+        "wedding": {
+            "casual": ["आरामदायक उत्सवी कुर्ता", "सॉफ्ट-फिट पायजामा", "कुशन वाले फ्लैट एथनिक जूते", "हल्का स्टोल"],
+            "smart": ["सांस लेने वाला उत्सवी कुर्ता या ट्यूनिक", "इलास्टिक-कमर वाले ट्राउज़र", "ग्रिप वाले फ्लैट जूते", "हल्का स्टोल"],
+            "bold": ["रंगीन आरामदायक उत्सवी टॉप", "सॉफ्ट-फिट ट्राउज़र", "कुशन वाले फ्लैट जूते", "हल्का स्कार्फ"]
+        },
+        "casual": {
+            "casual": ["सांस लेने वाली कॉटन टी-शर्ट", "इलास्टिक-कमर वाले ट्राउज़र", "कुशन वाले स्नीकर्स", "हल्की घड़ी"],
+            "smart": ["लिनेन शर्ट या ट्यूनिक", "आरामदायक चिनो ट्राउज़र", "ग्रिप वाले लो-हील जूते", "हल्का स्टोल"],
+            "bold": ["रंगीन आरामदायक टॉप", "सॉफ्ट-फिट ट्राउज़र", "कुशन वाले फ्लैट जूते", "हल्का स्कार्फ"]
+        },
+        "night": {
+            "casual": ["गहरे रंग का सांस लेने वाला टॉप", "इलास्टिक-कमर वाले ट्राउज़र", "कुशन वाले फ्लैट जूते", "हल्की जैकेट"],
+            "smart": ["लिनेन शर्ट या ट्यूनिक", "आसान फिटिंग वाले ट्राउज़र", "ग्रिप वाले लो-हील जूते", "हल्का स्टोल"],
+            "bold": ["रंगीन आरामदायक टॉप", "सॉफ्ट-फिट ट्राउज़र", "कुशन वाले फ्लैट जूते", "हल्का स्कार्फ"]
+        }
     }
 }
 
@@ -180,12 +345,73 @@ STYLE_NAMES = {
     "bold": "बोल्ड"
 }
 CATEGORIES = {"top", "bottom", "shorts", "shoes", "accessory"}
+WARDROBE_AUDIENCES = {"adult", "children", "senior", "all"}
+APPAREL_CATEGORIES = {"top", "bottom", "shorts"}
+CLOTHING_SIZES = {"any", "XS", "S", "M", "L", "XL", "XXL", "XXXL"}
+FIT_PREFERENCES = {
+    "regular": "नियमित फिट",
+    "relaxed": "आरामदायक ढीला फिट",
+    "plus": "प्लस-साइज़ फिट"
+}
 
 
+def wardrobe_audience_for(audience):
+    return "adult" if audience in {"men", "women"} else audience
+
+
+def fit_note_for(audience, fit_preference):
+    if audience == "children":
+        return "बच्चे की माप देखकर सही साइज़ चुनें; कपड़ा आरामदायक हो और बहुत ढीला न हो।"
+    if audience == "senior":
+        if fit_preference == "plus":
+            return "ब्रांड का साइज़ चार्ट देखकर आरामदायक प्लस-साइज़ चुनें; आसान closures और आरामदायक जूते देखें।"
+        return "आरामदायक फिट, आसानी से पहने जाने वाले कपड़े और सहज closures चुनें।"
+    if fit_preference == "plus":
+        return "अपनी माप के अनुसार ब्रांड का साइज़ चार्ट देखें; प्लस-साइज़ और रिलैक्स्ड-फिट विकल्प चुनें।"
+    if fit_preference == "relaxed":
+        return "आराम के लिए रिलैक्स्ड फिट चुनें और कंधे व कमर पर सही बैठना देखें।"
+    return "ऐसा फिट चुनें जिसमें आराम से बैठना और चलना आसान हो।"
+
+
+def add_ethnic_design(outfit, style, audience, outfit_type):
+    if audience != "women" or outfit_type != "ethnic":
+        return outfit
+
+    top = outfit["top"]
+    if "साड़ी" in top:
+        design_type = "saree"
+    elif "लहंगा" in top:
+        design_type = "lehenga"
+    elif any(term in top for term in ("सूट", "अनारकली", "सलवार")):
+        design_type = "suit"
+    else:
+        design_type = "kurti"
+
+    template = ETHNIC_DESIGN_TEMPLATES[design_type]
+    outfit.update({
+        "design_type": design_type,
+        "design_title": template["title"],
+        "design_details": template["details"][style],
+        "design_colors": ETHNIC_DESIGN_COLORS[style]
+    })
+    return outfit
+
+
+@contextmanager
 def connect_db():
+    Path(DATABASE).parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DATABASE)
     connection.row_factory = sqlite3.Row
-    return connection
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def login_required(function):
     @wraps(function)
     def wrapper(*args, **kwargs):
@@ -197,8 +423,9 @@ def login_required(function):
 @app.post("/api/analyze-photo")
 @login_required
 def analyze_photo():
-    if not os.environ.get("OPENAI_API_KEY"):
-        return jsonify({"error": "OPENAI_API_KEY सेट नहीं है।"}), 503
+    groq_api_key = os.environ.get("GROQ_API_KEY")
+    if not groq_api_key:
+        return jsonify({"error": "GROQ_API_KEY सेट नहीं है।"}), 503
 
     photo = request.files.get("photo")
     party = request.form.get("party_type")
@@ -206,6 +433,8 @@ def analyze_photo():
     style = request.form.get("style")
     audience = request.form.get("audience")
     bottom_preference = request.form.get("bottom_preference", "trousers")
+    size_preference = request.form.get("size_preference", "any")
+    outfit_type = request.form.get("outfit_type", "any")
     language = request.form.get("language", "hi")
 
     if request.form.get("photo_consent") != "yes":
@@ -220,6 +449,10 @@ def analyze_photo():
         or style not in STYLE_NAMES
         or audience not in AUDIENCE_NAMES
         or bottom_preference not in BOTTOM_NAMES
+        or not isinstance(size_preference, str)
+        or size_preference not in CLOTHING_SIZES
+        or not isinstance(outfit_type, str)
+        or outfit_type not in OUTFIT_TYPES
     ):
         return jsonify({"error": "पार्टी, मौसम, स्टाइल और कपड़ों के विकल्प जाँचें।"}), 400
 
@@ -245,31 +478,85 @@ def analyze_photo():
     except (UnidentifiedImageError, OSError, ValueError):
         return jsonify({"error": "यह सही image फ़ाइल नहीं लगती।"}), 400
 
+    wardrobe_audience = wardrobe_audience_for(audience)
     with connect_db() as connection:
         items = connection.execute(
-            """SELECT name, category, color
+            """SELECT name, category, color, size
                FROM wardrobe_items
-               WHERE user_id = ?
-               ORDER BY id DESC LIMIT 50""",
-            (session["user_id"],)
+               WHERE user_id = ? AND audience IN (?, 'all')
+                 AND (
+                    ? = 'any'
+                    OR category NOT IN ('top', 'bottom', 'shorts')
+                    OR size IN (?, 'any')
+                 )
+               ORDER BY CASE WHEN audience = ? THEN 0 ELSE 1 END,
+                        CASE WHEN category IN ('top', 'bottom', 'shorts')
+                                  AND ? != 'any' AND size = ? THEN 0
+                             WHEN category IN ('top', 'bottom', 'shorts')
+                                  AND ? != 'any' AND size = 'any' THEN 1
+                             ELSE 0 END,
+                        id DESC
+               LIMIT 50""",
+            (
+                session["user_id"],
+                wardrobe_audience,
+                size_preference,
+                size_preference,
+                wardrobe_audience,
+                size_preference,
+                size_preference,
+                size_preference
+            )
         ).fetchall()
 
     wardrobe_text = "\n".join(
-        f"- {item['color']} {item['name']} ({item['category']})"
+        f"- {item['color']} {item['name']} ({item['category']}, "
+        f"size {item['size']})"
         for item in items
     ) or "यूज़र की अलमारी में अभी कोई कपड़ा दर्ज नहीं है।"
 
     answer_language = "English" if language == "en" else "Hindi"
+    audience_guidance = {
+        "children": (
+            "Choose comfortable, age-appropriate clothes and secure, "
+            "well-fitting shoes. Avoid high heels and small detachable accessories."
+        ),
+        "senior": (
+            "Prioritize comfort, breathable layers, easy-to-wear closures, "
+            "and stable flat or low-heel footwear."
+        )
+    }.get(audience, "Use practical, comfortable party styling.")
+    size_guidance = (
+        "There is no preferred clothing size; any wardrobe size may be used."
+        if size_preference == "any"
+        else (
+            f"Preferred clothing size: {size_preference}. "
+            "Prefer wardrobe clothing in this size or free size."
+        )
+    )
+    uses_ethnic_wear = audience == "women" and outfit_type == "ethnic"
+    outfit_guidance = (
+        "Recommend a traditional Indian ethnic outfit such as a saree, "
+        "lehenga, salwar suit, or kurta set. Do not recommend shorts."
+        if uses_ethnic_wear
+        else "Choose a suitable outfit for the selected occasion and style."
+    )
+    effective_bottom_preference = (
+        "trousers" if uses_ethnic_wear else bottom_preference
+    )
     prompt = f"""
 You are a practical personal fashion stylist.
 Use the uploaded photo only for visible outfit colors and styling context.
 Do not identify the person or infer age, gender, body shape, skin tone, or identity.
 The user selected this styling category: {AUDIENCE_NAMES[audience]}.
+Styling guidance: {audience_guidance}
 Party: {PARTY_NAMES[party]}
 Style: {STYLE_NAMES[style]}
 Weather: {weather}
-Bottom preference: {BOTTOM_NAMES[bottom_preference]}. Follow this choice exactly.
+Bottom preference: {BOTTOM_NAMES[effective_bottom_preference]}. Follow this choice exactly.
 If shorts are selected, recommend shorts for the bottom; otherwise recommend long pants/trousers.
+Outfit preference: {outfit_guidance}
+{size_guidance}
 User's wardrobe:
 {wardrobe_text}
 
@@ -292,8 +579,11 @@ Write all values in {answer_language}.
     }
 
     try:
-        response = OpenAI().responses.create(
-            model="gpt-6-astra",
+        response = OpenAI(
+            api_key=groq_api_key,
+            base_url="https://api.groq.com/openai/v1"
+        ).responses.create(
+            model="qwen/qwen3.8-27b",
             input=[{
                 "role": "user",
                 "content": [
@@ -319,6 +609,7 @@ Write all values in {answer_language}.
         outfit["party_name"] = PARTY_NAMES[party]
         outfit["style_name"] = STYLE_NAMES[style]
         outfit["audience_name"] = AUDIENCE_NAMES[audience]
+        add_ethnic_design(outfit, style, audience, outfit_type)
         return jsonify({"outfit": outfit})
 
     except (OpenAIError, json.JSONDecodeError):
@@ -333,7 +624,11 @@ def initialize_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                display_name TEXT NOT NULL DEFAULT '',
+                preferred_audience TEXT NOT NULL DEFAULT '',
+                preferred_style TEXT NOT NULL DEFAULT '',
+                preferred_size TEXT NOT NULL DEFAULT 'any'
             )
         """)
 
@@ -354,10 +649,43 @@ def initialize_database():
                 name TEXT NOT NULL,
                 category TEXT NOT NULL,
                 color TEXT NOT NULL DEFAULT '',
+                size TEXT NOT NULL DEFAULT 'any',
                 created_at TEXT NOT NULL,
-                user_id INTEGER NOT NULL DEFAULT 1
+                user_id INTEGER NOT NULL DEFAULT 1,
+                image_data BLOB,
+                image_mime TEXT
             )
         """)
+
+        user_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(users)").fetchall()
+        }
+        for column, definition in (
+            ("display_name", "TEXT NOT NULL DEFAULT ''"),
+            ("preferred_audience", "TEXT NOT NULL DEFAULT ''"),
+            ("preferred_style", "TEXT NOT NULL DEFAULT ''"),
+            ("preferred_size", "TEXT NOT NULL DEFAULT 'any'")
+        ):
+            if column not in user_columns:
+                connection.execute(
+                    f"ALTER TABLE users ADD COLUMN {column} {definition}"
+                )
+
+        wardrobe_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(wardrobe_items)"
+            ).fetchall()
+        }
+        for column, definition in (
+            ("image_data", "BLOB"),
+            ("image_mime", "TEXT")
+        ):
+            if column not in wardrobe_columns:
+                connection.execute(
+                    f"ALTER TABLE wardrobe_items ADD COLUMN {column} {definition}"
+                )
 
         # पुराने डेटाबेस में user_id न हो तो उसे जोड़ें।
         for table in ("saved_outfits", "wardrobe_items"):
@@ -374,61 +702,315 @@ def initialize_database():
                         ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1"""
                 )
 
+            if table == "wardrobe_items" and "audience" not in columns:
+                connection.execute(
+                    """ALTER TABLE wardrobe_items
+                       ADD COLUMN audience TEXT NOT NULL DEFAULT 'adult'"""
+                )
+
+            if table == "wardrobe_items" and "size" not in columns:
+                connection.execute(
+                    """ALTER TABLE wardrobe_items
+                       ADD COLUMN size TEXT NOT NULL DEFAULT 'any'"""
+                )
 
 
 
 
-def wardrobe_pick(user_id, category, fallback):
+def wardrobe_pick(
+    user_id, category, fallback, audience, size_preference="any"
+):
+    wardrobe_audience = wardrobe_audience_for(audience)
     with connect_db() as connection:
         item = connection.execute(
-            """SELECT name, color
+            """SELECT name, color, size
                FROM wardrobe_items
                WHERE user_id = ? AND category = ?
-               ORDER BY id
+                 AND audience IN (?, 'all')
+                 AND (
+                    ? = 'any'
+                    OR category NOT IN ('top', 'bottom', 'shorts')
+                    OR size IN (?, 'any')
+                 )
+               ORDER BY CASE WHEN audience = ? THEN 0 ELSE 1 END,
+                        CASE WHEN category IN ('top', 'bottom', 'shorts')
+                                  AND ? != 'any' AND size = ? THEN 0
+                             WHEN category IN ('top', 'bottom', 'shorts')
+                                  AND ? != 'any' AND size = 'any' THEN 1
+                             ELSE 0 END,
+                        RANDOM()
                LIMIT 1""",
-            (user_id, category)
+            (
+                user_id,
+                category,
+                wardrobe_audience,
+                size_preference,
+                size_preference,
+                wardrobe_audience,
+                size_preference,
+                size_preference,
+                size_preference
+            )
         ).fetchone()
 
     if not item:
         return fallback
 
-    return f"{item['color']} {item['name']}".strip()
+    item_name = f"{item['color']} {item['name']}".strip()
+    if category in APPAREL_CATEGORIES and item["size"] != "any":
+        return f"{item_name} ({item['size']})"
+    return item_name
 
 
 def make_recommendation(
     user_id, party_type, weather, style, audience,
-    bottom_preference="trousers"
+    bottom_preference="trousers", size_preference="any", outfit_type="any"
 ):
-    outfit_options = WOMEN_OUTFITS if audience == "women" else OUTFITS
+    if audience == "women" and outfit_type == "ethnic":
+        outfit_options = ETHNIC_WOMEN_OUTFITS
+    else:
+        outfit_options = AGE_GROUP_OUTFITS.get(
+            audience,
+            WOMEN_OUTFITS if audience == "women" else OUTFITS
+        )
     defaults = outfit_options[party_type][style]
 
-    if bottom_preference == "shorts":
+    if audience == "women" and outfit_type == "ethnic":
+        bottom = wardrobe_pick(
+            user_id, "bottom", defaults[1], audience, size_preference
+        )
+    elif bottom_preference == "shorts":
         bottom = wardrobe_pick(
             user_id,
             "shorts",
-            SHORTS_OUTFITS[audience][style]
+            SHORTS_OUTFITS[audience][style],
+            audience,
+            size_preference
         )
     else:
-        bottom = wardrobe_pick(user_id, "bottom", defaults[1])
+        bottom = wardrobe_pick(
+            user_id, "bottom", defaults[1], audience, size_preference
+        )
 
     outfit = {
-        "top": wardrobe_pick(user_id, "top", defaults[0]),
+        "top": wardrobe_pick(
+            user_id, "top", defaults[0], audience, size_preference
+        ),
         "bottom": bottom,
-        "shoes": wardrobe_pick(user_id, "shoes", defaults[2]),
-        "accessory": wardrobe_pick(user_id, "accessory", defaults[3]),
+        "shoes": wardrobe_pick(user_id, "shoes", defaults[2], audience),
+        "accessory": wardrobe_pick(user_id, "accessory", defaults[3], audience),
         "party_name": PARTY_NAMES[party_type],
         "style_name": STYLE_NAMES[style],
         "audience_name": AUDIENCE_NAMES[audience]
     }
 
-    if weather == "cold":
+    if audience == "children" and weather == "cold":
+        outfit["weather_tip"] = "बच्चे के लिए आरामदायक गर्म परतें साथ रखें।"
+    elif audience == "children" and weather == "rainy":
+        outfit["weather_tip"] = "बारिश में बच्चे के लिए ग्रिप वाले, पानी से बचाने वाले जूते चुनें।"
+    elif audience == "children":
+        outfit["weather_tip"] = "गर्मी में बच्चे के लिए हल्के, सांस लेने वाले कपड़े चुनें।"
+    elif audience == "senior" and weather == "cold":
+        outfit["weather_tip"] = "ठंड में आरामदायक, हल्की परतें रखें जिन्हें आसानी से पहना जा सके।"
+    elif audience == "senior" and weather == "rainy":
+        outfit["weather_tip"] = "बारिश में ग्रिप वाले, आरामदायक जूते चुनें।"
+    elif audience == "senior":
+        outfit["weather_tip"] = "गर्मी में हल्के, सांस लेने वाले और आरामदायक कपड़े चुनें।"
+    elif weather == "cold":
         outfit["weather_tip"] = "ठंड के लिए जैकेट या ब्लेज़र साथ रखें।"
     elif weather == "rainy":
         outfit["weather_tip"] = "बारिश में पानी से कम खराब होने वाले जूते चुनें।"
     else:
         outfit["weather_tip"] = "गर्मी में हल्के और आरामदायक कपड़े चुनें।"
 
-    return outfit
+    return add_ethnic_design(outfit, style, audience, outfit_type)
+
+
+GOOGLE_PHOTOS_API = "https://photospicker.googleapis.com/v1"
+MAX_WARDROBE_PHOTO_SIZE = 5 * 1024 * 1024
+
+
+class GooglePhotosAPIError(Exception):
+    def __init__(self, status_code, message):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def google_photos_access_token():
+    authorization = request.headers.get("Authorization", "")
+    scheme, separator, token = authorization.partition(" ")
+    if (
+        not separator
+        or scheme.lower() != "bearer"
+        or not token
+        or len(token) > 4096
+        or any(character.isspace() for character in token)
+    ):
+        raise GooglePhotosAPIError(
+            401, "Google Photos से पहले कनेक्ट करें।"
+        )
+    return token
+
+
+def google_photos_api_request(
+    path, access_token, *, method="GET", query=None, body=None
+):
+    url = f"{GOOGLE_PHOTOS_API}/{path}"
+    if query:
+        url = f"{url}?{urlencode(query)}"
+
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    google_request = Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+    )
+
+    try:
+        with urlopen(google_request, timeout=20) as response:
+            response_body = response.read(1024 * 1024 + 1)
+            if len(response_body) > 1024 * 1024:
+                raise GooglePhotosAPIError(
+                    502, "Google Photos का जवाब बहुत बड़ा है।"
+                )
+    except HTTPError as error:
+        app.logger.warning(
+            "Google Photos API returned HTTP %s", error.code
+        )
+        if error.code in {401, 403}:
+            raise GooglePhotosAPIError(
+                401, "Google Photos की अनुमति नहीं मिली। दोबारा कनेक्ट करें।"
+            ) from error
+        if error.code == 429:
+            raise GooglePhotosAPIError(
+                429, "Google Photos की अनुरोध सीमा पूरी हुई। थोड़ी देर बाद कोशिश करें।"
+            ) from error
+        raise GooglePhotosAPIError(
+            502, "Google Photos से जानकारी नहीं मिल सकी।"
+        ) from error
+    except URLError as error:
+        app.logger.warning("Google Photos API connection failed: %s", error.reason)
+        raise GooglePhotosAPIError(
+            502, "Google Photos से कनेक्ट नहीं हो पाया।"
+        ) from error
+
+    try:
+        result = json.loads(response_body)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise GooglePhotosAPIError(
+            502, "Google Photos का जवाब पढ़ा नहीं जा सका।"
+        ) from error
+
+    if not isinstance(result, dict):
+        raise GooglePhotosAPIError(
+            502, "Google Photos का जवाब सही नहीं है।"
+        )
+    return result
+
+
+def google_picker_session_id(value):
+    if not isinstance(value, str) or not re.fullmatch(
+        r"[A-Za-z0-9_-]{1,200}", value
+    ):
+        raise GooglePhotosAPIError(400, "Google Photos session सही नहीं है।")
+    return value
+
+
+def google_picked_photo(session_id, media_item_id, access_token):
+    response = google_photos_api_request(
+        "mediaItems",
+        access_token,
+        query={"sessionId": session_id, "pageSize": 100}
+    )
+    items = response.get("mediaItems", [])
+    if not isinstance(items, list):
+        raise GooglePhotosAPIError(
+            502, "Google Photos से चुनी गई फोटो नहीं मिल सकी।"
+        )
+
+    for item in items:
+        if (
+            isinstance(item, dict)
+            and item.get("id") == media_item_id
+            and item.get("type") == "PHOTO"
+        ):
+            media_file = item.get("mediaFile")
+            if not isinstance(media_file, dict):
+                break
+            return media_file
+
+    raise GooglePhotosAPIError(
+        400, "यह फोटो इस Google Photos चयन में नहीं मिली।"
+    )
+
+
+def download_google_photo(media_file, access_token):
+    base_url = media_file.get("baseUrl")
+    parsed_url = urlsplit(base_url or "")
+    if (
+        parsed_url.scheme != "https"
+        or not parsed_url.hostname
+        or not parsed_url.hostname.endswith(".googleusercontent.com")
+        or len(base_url) > 4096
+    ):
+        raise GooglePhotosAPIError(
+            502, "Google Photos ने मान्य फोटो लिंक नहीं दिया।"
+        )
+
+    photo_request = Request(
+        f"{base_url}=d",
+        headers={"Authorization": f"Bearer {access_token}"}
+    )
+    try:
+        with urlopen(photo_request, timeout=30) as response:
+            photo_data = response.read(MAX_WARDROBE_PHOTO_SIZE + 1)
+    except HTTPError as error:
+        app.logger.warning(
+            "Google Photos image download returned HTTP %s", error.code
+        )
+        raise GooglePhotosAPIError(
+            502, "Google Photos से फोटो डाउनलोड नहीं हो सकी।"
+        ) from error
+    except URLError as error:
+        app.logger.warning(
+            "Google Photos image download failed: %s", error.reason
+        )
+        raise GooglePhotosAPIError(
+            502, "Google Photos से फोटो डाउनलोड नहीं हो सकी।"
+        ) from error
+
+    if not photo_data or len(photo_data) > MAX_WARDROBE_PHOTO_SIZE:
+        raise GooglePhotosAPIError(
+            400, "चुनी गई फोटो 5 MB से छोटी होनी चाहिए।"
+        )
+
+    try:
+        image = Image.open(BytesIO(photo_data))
+        if image.format not in {"JPEG", "PNG", "WEBP"}:
+            raise GooglePhotosAPIError(
+                400, "Google Photos से JPG, PNG या WebP फोटो चुनें।"
+            )
+        if image.width * image.height > 20_000_000:
+            raise GooglePhotosAPIError(
+                400, "चुनी गई फोटो का resolution बहुत बड़ा है।"
+            )
+        image.verify()
+        image = Image.open(BytesIO(photo_data)).convert("RGB")
+        image.thumbnail((1200, 1200))
+        normalized_image = BytesIO()
+        image.save(normalized_image, format="JPEG", quality=85)
+        return normalized_image.getvalue()
+    except GooglePhotosAPIError:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError) as error:
+        raise GooglePhotosAPIError(
+            400, "Google Photos से मान्य image फ़ाइल चुनें।"
+        ) from error
 
 
 @app.get("/")
@@ -527,6 +1109,8 @@ def recommend():
     style = data.get("style")
     audience = data.get("audience")
     bottom_preference = data.get("bottom_preference", "trousers")
+    size_preference = data.get("size_preference", "any")
+    outfit_type = data.get("outfit_type", "any")
 
     if (
         party not in PARTY_NAMES
@@ -534,6 +1118,10 @@ def recommend():
         or style not in STYLE_NAMES
         or audience not in AUDIENCE_NAMES
         or bottom_preference not in BOTTOM_NAMES
+        or not isinstance(size_preference, str)
+        or size_preference not in CLOTHING_SIZES
+        or not isinstance(outfit_type, str)
+        or outfit_type not in OUTFIT_TYPES
     ):
         return jsonify({
             "error": "पार्टी, मौसम, स्टाइल, किसके लिए और नीचे के कपड़े जाँचें।"
@@ -541,7 +1129,7 @@ def recommend():
 
     outfit = make_recommendation(
         session["user_id"], party, weather, style, audience,
-        bottom_preference
+        bottom_preference, size_preference, outfit_type
     )
     return jsonify({"outfit": outfit})
 
@@ -551,7 +1139,7 @@ def recommend():
 def get_wardrobe():
     with connect_db() as connection:
         rows = connection.execute(
-            """SELECT id, name, category, color
+            """SELECT id, name, category, color, audience, size
                FROM wardrobe_items
                WHERE user_id = ?
                ORDER BY id DESC""",
@@ -568,6 +1156,8 @@ def add_wardrobe_item():
     name = str(data.get("name", "")).strip()
     category = data.get("category")
     color = str(data.get("color", "")).strip()
+    audience = data.get("audience", "adult")
+    size = data.get("size", "any")
 
     if not name or len(name) > 60:
         return jsonify({
@@ -577,20 +1167,33 @@ def add_wardrobe_item():
     if category not in CATEGORIES:
         return jsonify({"error": "कपड़े का सही प्रकार चुनें।"}), 400
 
+    if audience not in WARDROBE_AUDIENCES:
+        return jsonify({"error": "यह कपड़ा किसकी अलमारी का है, सही विकल्प चुनें।"}), 400
+
+    if not isinstance(size, str) or size not in CLOTHING_SIZES:
+        return jsonify({"error": "कपड़ों का सही साइज़ चुनें।"}), 400
+
+    if category not in APPAREL_CATEGORIES and size != "any":
+        return jsonify({
+            "error": "साइज़ का विकल्प सिर्फ कपड़ों के लिए है।"
+        }), 400
+
     if len(color) > 30:
         return jsonify({"error": "रंग का नाम 30 अक्षरों से छोटा रखें।"}), 400
 
     with connect_db() as connection:
         cursor = connection.execute(
             """INSERT INTO wardrobe_items
-               (name, category, color, created_at, user_id)
-               VALUES (?, ?, ?, ?, ?)""",
+               (name, category, color, created_at, user_id, audience, size)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
                 name,
                 category,
                 color,
                 datetime.now().isoformat(timespec="seconds"),
-                session["user_id"]
+                session["user_id"],
+                audience,
+                size
             )
         )
 
@@ -625,6 +1228,8 @@ def save_outfit():
     style = data.get("style")
     audience = data.get("audience")
     bottom_preference = data.get("bottom_preference", "trousers")
+    size_preference = data.get("size_preference", "any")
+    outfit_type = data.get("outfit_type", "any")
 
     if (
         party not in PARTY_NAMES
@@ -632,6 +1237,10 @@ def save_outfit():
         or style not in STYLE_NAMES
         or audience not in AUDIENCE_NAMES
         or bottom_preference not in BOTTOM_NAMES
+        or not isinstance(size_preference, str)
+        or size_preference not in CLOTHING_SIZES
+        or not isinstance(outfit_type, str)
+        or outfit_type not in OUTFIT_TYPES
     ):
         return jsonify({
             "error": "पहले सही पार्टी, मौसम, स्टाइल और कपड़ों के विकल्प चुनें।"
@@ -654,10 +1263,11 @@ def save_outfit():
             "style_name": STYLE_NAMES[style],
             "audience_name": AUDIENCE_NAMES[audience]
         })
+        add_ethnic_design(outfit, style, audience, outfit_type)
     else:
         outfit = make_recommendation(
             session["user_id"], party, weather, style, audience,
-            bottom_preference
+            bottom_preference, size_preference, outfit_type
         )
 
     with connect_db() as connection:

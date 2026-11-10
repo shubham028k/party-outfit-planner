@@ -4,15 +4,37 @@ const saveMessage = document.getElementById("saveMessage");
 const saveButton = document.getElementById("saveButton");
 const resultPlaceholder = document.getElementById("resultPlaceholder");
 const outfitResult = document.getElementById("outfitResult");
+const audienceSelect = document.getElementById("audience");
+const outfitTypeLabel = document.getElementById("outfitTypeLabel");
+const outfitTypeSelect = document.getElementById("outfitType");
+const bottomPreferenceLabel = document.querySelector('label[for="bottomPreference"]');
+const bottomPreferenceSelect = document.getElementById("bottomPreference");
 
 const wardrobeForm = document.getElementById("wardrobeForm");
 const wardrobeMessage = document.getElementById("wardrobeMessage");
 const wardrobeList = document.getElementById("wardrobeList");
 const emptyWardrobe = document.getElementById("emptyWardrobe");
 const wardrobeCount = document.getElementById("wardrobeCount");
+const wardrobeCategory = document.getElementById("wardrobeCategory");
+const wardrobeSizeField = document.getElementById("wardrobeSizeField");
+const wardrobeSize = document.getElementById("wardrobeSize");
 
 let currentSelection = null;
 let currentOutfit = null;
+
+function updateOutfitTypeFields() {
+  const isWomen = audienceSelect.value === "women";
+  outfitTypeLabel.hidden = !isWomen;
+  outfitTypeSelect.hidden = !isWomen;
+
+  const useEthnicOutfit = isWomen && outfitTypeSelect.value === "ethnic";
+  bottomPreferenceLabel.hidden = useEthnicOutfit;
+  bottomPreferenceSelect.hidden = useEthnicOutfit;
+}
+
+audienceSelect.addEventListener("change", updateOutfitTypeFields);
+outfitTypeSelect.addEventListener("change", updateOutfitTypeFields);
+updateOutfitTypeFields();
 
 const categoryNames = {
   top: "शर्ट / टॉप",
@@ -21,6 +43,254 @@ const categoryNames = {
   shoes: "जूते",
   accessory: "एक्सेसरी"
 };
+
+const wardrobeAudienceNames = {
+  adult: "वयस्क",
+  children: "बच्चे",
+  senior: "बुज़ुर्ग",
+  all: "सबके लिए"
+};
+
+const colorCombinationIdeas = [
+  {
+    title: ["क्लासिक न्यूट्रल", "Classic neutrals"],
+    combo: ["नेवी टॉप · बेज पैंट · सफ़ेद या टैन जूते", "Navy top · beige trousers · white or tan shoes"],
+    colors: ["#263b67", "#d9c8a4", "#f4f1e8"]
+  },
+  {
+    title: ["अर्थी टोन", "Earth tones"],
+    combo: ["ऑलिव टॉप · क्रीम पैंट · ब्राउन जूते", "Olive top · cream trousers · brown shoes"],
+    colors: ["#69734b", "#e7dfc8", "#79523a"]
+  },
+  {
+    title: ["सॉफ्ट पेस्टल", "Soft pastels"],
+    combo: ["लैवेंडर टॉप · ऑफ़-व्हाइट पैंट · सफ़ेद जूते", "Lavender top · off-white trousers · white shoes"],
+    colors: ["#b8a2df", "#e9e5dd", "#f4f1e8"]
+  },
+  {
+    title: ["बोल्ड कॉन्ट्रास्ट", "Bold contrast"],
+    combo: ["मरून टॉप · चारकोल पैंट · काले जूते", "Burgundy top · charcoal trousers · black shoes"],
+    colors: ["#792d49", "#41414b", "#24232a"]
+  },
+  {
+    title: ["डेनिम क्लासिक", "Denim classic"],
+    combo: ["सफ़ेद शर्ट · ब्लू जींस · सफ़ेद स्नीकर्स", "White shirt · blue jeans · white sneakers"],
+    colors: ["#f4f1e8", "#416b9a", "#f4f1e8"]
+  },
+  {
+    title: ["ब्लैक एंड ग्रे", "Black and gray"],
+    combo: ["ब्लैक टॉप · ग्रे पैंट · सफ़ेद या काले जूते", "Black top · gray trousers · white or black shoes"],
+    colors: ["#292832", "#96959b", "#f4f1e8"]
+  },
+  {
+    title: ["स्काई ब्लू", "Sky blue"],
+    combo: ["स्काई ब्लू टॉप · बेज पैंट · टैन जूते", "Sky-blue top · beige trousers · tan shoes"],
+    colors: ["#79b9dc", "#d9c8a4", "#b48758"]
+  },
+  {
+    title: ["ज्वेल टोन", "Jewel tones"],
+    combo: ["एमराल्ड टॉप · काली पैंट · काले जूते", "Emerald top · black trousers · black shoes"],
+    colors: ["#14745b", "#292832", "#24232a"]
+  },
+  {
+    title: ["रस्ट और नेवी", "Rust and navy"],
+    combo: ["रस्ट टॉप · नेवी पैंट · ब्राउन जूते", "Rust top · navy trousers · brown shoes"],
+    colors: ["#b65e3b", "#263b67", "#79523a"]
+  },
+  {
+    title: ["क्रीम और ऑलिव", "Cream and olive"],
+    combo: ["क्रीम टॉप · ऑलिव पैंट · टैन जूते", "Cream top · olive trousers · tan shoes"],
+    colors: ["#e7dfc8", "#69734b", "#b48758"]
+  },
+  {
+    title: ["पिंक पेस्टल", "Pink pastel"],
+    combo: ["सॉफ्ट पिंक टॉप · ग्रे पैंट · सफ़ेद जूते", "Soft-pink top · gray trousers · white shoes"],
+    colors: ["#e9a6b8", "#96959b", "#f4f1e8"]
+  }
+];
+
+function createOutfitIllustration(idea, title) {
+  const namespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(namespace, "svg");
+  svg.setAttribute("viewBox", "0 0 120 140");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", title);
+  svg.setAttribute("focusable", "false");
+
+  const backdrop = document.createElementNS(namespace, "rect");
+  backdrop.setAttribute("x", "5");
+  backdrop.setAttribute("y", "5");
+  backdrop.setAttribute("width", "110");
+  backdrop.setAttribute("height", "130");
+  backdrop.setAttribute("rx", "18");
+  backdrop.setAttribute("fill", "rgba(183, 162, 255, 0.1)");
+  svg.appendChild(backdrop);
+
+  const garments = [
+    {
+      path: "M36 16 22 23 12 43 25 49 31 38 31 63 89 63 89 38 95 49 108 43 98 23 84 16 70 23 50 23Z",
+      color: idea.colors[0]
+    },
+    {
+      path: "M34 66 86 66 81 112 65 112 60 81 55 112 39 112Z",
+      color: idea.colors[1]
+    },
+    {
+      path: "M39 111 53 111 53 119Q50 124 29 124L23 122Q26 117 39 111Z",
+      color: idea.colors[2]
+    },
+    {
+      path: "M67 111 81 111 96 120Q99 121 97 124L67 124Z",
+      color: idea.colors[2]
+    }
+  ];
+
+  for (const garment of garments) {
+    const shape = document.createElementNS(namespace, "path");
+    shape.setAttribute("d", garment.path);
+    shape.setAttribute("fill", garment.color);
+    shape.setAttribute("stroke", "rgba(255, 255, 255, 0.45)");
+    shape.setAttribute("stroke-width", "1.5");
+    shape.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(shape);
+  }
+
+  return svg;
+}
+
+function createEthnicDesignVisual(type, colors, title) {
+  const namespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(namespace, "svg");
+  svg.setAttribute("viewBox", "0 0 160 180");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", title);
+  svg.setAttribute("focusable", "false");
+
+  const backdrop = document.createElementNS(namespace, "rect");
+  backdrop.setAttribute("x", "8");
+  backdrop.setAttribute("y", "8");
+  backdrop.setAttribute("width", "144");
+  backdrop.setAttribute("height", "164");
+  backdrop.setAttribute("rx", "28");
+  backdrop.setAttribute("fill", "rgba(255, 255, 255, 0.045)");
+  svg.appendChild(backdrop);
+
+  const garmentGroup = document.createElementNS(namespace, "g");
+  garmentGroup.classList.add("design-fabric");
+  const garments = type === "saree"
+    ? [
+      ["M48 53 111 53 103 157 55 157Z", colors[0], "design-skirt"],
+      ["M49 28 35 35 27 58 45 64 52 48 53 62 93 62 94 48 101 64 119 58 108 35 94 28 82 36 61 36Z", colors[1], "design-blouse"],
+      ["M82 34Q96 43 112 58L133 102Q115 93 101 85L91 61Z", colors[2], "design-pallu"],
+      ["M54 145Q79 151 105 145", "none", "design-border"]
+    ]
+    : type === "lehenga"
+      ? [
+        ["M49 34 36 40 29 62 48 66 54 51 57 64 91 64 94 51 101 66 120 62 110 40 96 34 83 42 61 42Z", colors[1], "design-blouse"],
+        ["M60 66 91 66Q101 106 124 153Q80 166 36 153Q54 111 60 66Z", colors[0], "design-skirt"],
+        ["M51 112Q80 121 109 112M44 137Q80 147 116 137", "none", "design-border"],
+        ["M95 38Q120 44 131 74L117 83 105 64Z", colors[2], "design-pallu"]
+      ]
+      : [
+        ["M53 30 39 36 31 63 48 68 55 52 57 119 102 119 104 52 111 68 128 63 118 36 103 30 88 39 68 39Z", colors[0], "design-suit"],
+        ["M68 40 80 54 92 40 88 119 72 119Z", colors[1], "design-detail"],
+        ["M109 38Q131 51 131 91L118 115 106 103 115 78Z", colors[2], "design-pallu"],
+        ["M57 115 73 115 69 158 54 158ZM87 115 102 115 107 158 92 158Z", colors[1], "design-pants"]
+      ];
+
+  for (const [pathData, color, className] of garments) {
+    const shape = document.createElementNS(namespace, "path");
+    shape.setAttribute("d", pathData);
+    shape.setAttribute("fill", color);
+    shape.setAttribute("stroke", "#f2d89b");
+    shape.setAttribute("stroke-width", className === "design-border" ? "2" : "1.5");
+    shape.setAttribute("stroke-linejoin", "round");
+    shape.classList.add(className);
+    garmentGroup.appendChild(shape);
+  }
+
+  svg.appendChild(garmentGroup);
+  return svg;
+}
+
+function renderEthnicDesign(outfit) {
+  const section = document.getElementById("designIdea");
+  const visual = document.getElementById("designVisual");
+  if (!section || !visual) return;
+
+  if (!outfit.design_type || !outfit.design_details) {
+    section.hidden = true;
+    visual.replaceChildren();
+    return;
+  }
+
+  const title = translateText(outfit.design_title || "डिज़ाइन आइडिया");
+  const palette = Array.isArray(outfit.design_colors)
+    ? outfit.design_colors.filter((color) => /^#[0-9a-f]{6}$/i.test(color)).slice(0, 3)
+    : [];
+  const colors = palette.length === 3
+    ? palette
+    : ["#842c52", "#d5b36a", "#f1dfbd"];
+  visual.replaceChildren(createEthnicDesignVisual(
+    outfit.design_type,
+    colors,
+    title
+  ));
+  document.getElementById("designIdeaTitle").textContent = title;
+  document.getElementById("designDetails").textContent =
+    translateText(outfit.design_details);
+  section.hidden = false;
+}
+
+function renderColorCombinations() {
+  const list = document.getElementById("colorCombinationList");
+  if (!list) return;
+
+  list.replaceChildren();
+  const languageIndex = appLanguage === "en" ? 1 : 0;
+
+  for (const [index, idea] of colorCombinationIdeas.entries()) {
+    const card = document.createElement("article");
+    card.className = "color-combination-card";
+    card.style.animationDelay = `${index * 35}ms`;
+
+    const titleText = idea.title[languageIndex];
+    const illustration = createOutfitIllustration(idea, titleText);
+    illustration.classList.add("color-combination-illustration");
+
+    const details = document.createElement("div");
+    details.className = "color-combination-details";
+
+    const title = document.createElement("strong");
+    title.textContent = titleText;
+
+    const combination = document.createElement("p");
+    combination.textContent = idea.combo[languageIndex];
+
+    details.append(title, combination);
+    card.append(illustration, details);
+    list.appendChild(card);
+  }
+}
+
+function updateWardrobeSizeField() {
+  const isClothing = ["top", "bottom", "shorts"].includes(
+    wardrobeCategory.value
+  );
+  wardrobeSizeField.hidden = !isClothing;
+  if (!isClothing) wardrobeSize.value = "any";
+}
+
+wardrobeCategory.addEventListener("change", updateWardrobeSizeField);
+updateWardrobeSizeField();
+
+function translateVisibleMessages() {
+  document.querySelectorAll(
+    "#errorMessage, #saveMessage, #wardrobeMessage, #photoMessage, #analysisMessage"
+  ).forEach((element) => {
+    element.textContent = translateText(element.textContent);
+  });
+}
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -32,12 +302,14 @@ form.addEventListener("submit", async (event) => {
     style: document.getElementById("style").value,
     weather: document.getElementById("weather").value,
     audience: document.getElementById("audience").value,
-    bottom_preference: document.getElementById("bottomPreference").value
+    outfit_type: document.getElementById("outfitType").value,
+    bottom_preference: document.getElementById("bottomPreference").value,
+    size_preference: document.getElementById("sizePreference").value
   };
 
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
-  button.querySelector("span").textContent = "लुक बन रहा है…";
+  button.querySelector("span").textContent = translateText("लुक बन रहा है…");
 
   try {
     const response = await fetch("/api/recommend", {
@@ -54,15 +326,16 @@ form.addEventListener("submit", async (event) => {
 
     showOutfit(data.outfit);
   } catch (error) {
-    errorMessage.textContent = error.message;
+    errorMessage.textContent = translateText(error.message);
   } finally {
     button.disabled = false;
-    button.querySelector("span").textContent = "मेरा लुक सुझाओ";
+    button.querySelector("span").textContent = translateText("मेरा लुक सुझाओ");
   }
 });
 
 function showOutfit(outfit) {
   currentOutfit = outfit;
+  renderEthnicDesign(outfit);
   document.getElementById("partyName").textContent = outfit.party_name;
   document.getElementById("styleName").textContent =
     `${outfit.audience_name} · ${outfit.style_name} स्टाइल`;
@@ -74,16 +347,18 @@ function showOutfit(outfit) {
 
   resultPlaceholder.hidden = true;
   outfitResult.hidden = false;
+  outfitResult.classList.remove("outfit-enter");
+  requestAnimationFrame(() => outfitResult.classList.add("outfit-enter"));
 }
 
 saveButton.addEventListener("click", async () => {
   if (!currentSelection) {
-    saveMessage.textContent = "पहले अपना लुक बनाओ।";
+    saveMessage.textContent = translateText("पहले अपना लुक बनाओ।");
     return;
   }
 
   saveButton.disabled = true;
-  saveMessage.textContent = "सेव हो रहा है…";
+  saveMessage.textContent = translateText("सेव हो रहा है…");
 
   try {
     const response = await fetch("/api/outfits", {
@@ -98,10 +373,10 @@ saveButton.addEventListener("click", async () => {
       throw new Error(data.error || "लुक सेव नहीं हो पाया।");
     }
 
-    saveMessage.textContent = "✓ " + data.message;
+    saveMessage.textContent = "✓ " + translateText(data.message);
     await loadHistory();
   } catch (error) {
-    saveMessage.textContent = error.message;
+    saveMessage.textContent = translateText(error.message);
   } finally {
     saveButton.disabled = false;
   }
@@ -114,12 +389,14 @@ wardrobeForm.addEventListener("submit", async (event) => {
   const item = {
     name: document.getElementById("wardrobeName").value.trim(),
     category: document.getElementById("wardrobeCategory").value,
-    color: document.getElementById("wardrobeColor").value.trim()
+    color: document.getElementById("wardrobeColor").value.trim(),
+    audience: document.getElementById("wardrobeAudience").value,
+    size: wardrobeSize.value
   };
 
   const addButton = wardrobeForm.querySelector('button[type="submit"]');
   addButton.disabled = true;
-  addButton.textContent = "जोड़ा जा रहा है…";
+  addButton.textContent = translateText("जोड़ा जा रहा है…");
 
   try {
     const response = await fetch("/api/wardrobe", {
@@ -135,13 +412,14 @@ wardrobeForm.addEventListener("submit", async (event) => {
     }
 
     wardrobeForm.reset();
-    wardrobeMessage.textContent = "✓ " + data.message;
+    updateWardrobeSizeField();
+    wardrobeMessage.textContent = "✓ " + translateText(data.message);
     await loadWardrobe();
   } catch (error) {
-    wardrobeMessage.textContent = error.message;
+    wardrobeMessage.textContent = translateText(error.message);
   } finally {
     addButton.disabled = false;
-    addButton.textContent = "＋ अलमारी में जोड़ो";
+    addButton.textContent = translateText("＋ अलमारी में जोड़ो");
   }
 });
 
@@ -164,8 +442,9 @@ async function loadWardrobe() {
   } catch (error) {
     wardrobeList.replaceChildren();
     emptyWardrobe.hidden = false;
-    emptyWardrobe.textContent = error.message;
+    emptyWardrobe.textContent = translateText(error.message);
   }
+  translateCards();
 }
 
 function createWardrobeCard(item) {
@@ -176,14 +455,19 @@ function createWardrobeCard(item) {
   title.textContent = item.name;
 
   const details = document.createElement("p");
-  const category = categoryNames[item.category] || item.category;
-  details.textContent = item.color
-    ? `${category} · ${item.color}`
-    : category;
+  const category = translateText(categoryNames[item.category] || item.category);
+  const audience = translateText(wardrobeAudienceNames[item.audience] || item.audience);
+  const color = translateText(item.color || "");
+  const size = item.size && item.size !== "any"
+    ? ` · ${translateText("साइज़")} ${item.size}`
+    : "";
+  details.textContent = color
+    ? `${audience} · ${category} · ${color}${size}`
+    : `${audience} · ${category}${size}`;
 
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
-  deleteButton.textContent = "हटाएँ";
+  deleteButton.textContent = translateText("हटाएँ");
   deleteButton.addEventListener("click", () => deleteWardrobeItem(item.id));
 
   card.append(title, details, deleteButton);
@@ -204,10 +488,10 @@ async function deleteWardrobeItem(id) {
       throw new Error(data.error || "कपड़ा हटाया नहीं जा सका।");
     }
 
-    wardrobeMessage.textContent = "✓ " + data.message;
+    wardrobeMessage.textContent = "✓ " + translateText(data.message);
     await loadWardrobe();
   } catch (error) {
-    wardrobeMessage.textContent = error.message;
+    wardrobeMessage.textContent = translateText(error.message);
   }
 }
 
@@ -234,8 +518,9 @@ async function loadHistory() {
   } catch (error) {
     historyList.replaceChildren();
     emptyHistory.hidden = false;
-    emptyHistory.textContent = error.message;
+    emptyHistory.textContent = translateText(error.message);
   }
+  translateCards();
 }
 
 function createHistoryCard(saved) {
@@ -243,22 +528,35 @@ function createHistoryCard(saved) {
   card.className = "history-card";
 
   const title = document.createElement("h3");
-  title.textContent =
-    `${saved.outfit.party_name} · ${saved.outfit.style_name}`;
+  title.textContent = translateText(
+    `${saved.outfit.party_name} · ${saved.outfit.style_name}`
+  );
 
   const details = document.createElement("p");
-  details.textContent =
-    `👕 ${saved.outfit.top} · 👖 ${saved.outfit.bottom} · 👟 ${saved.outfit.shoes}`;
+  details.textContent = translateText(
+    `👕 ${saved.outfit.top} · 👖 ${saved.outfit.bottom} · 👟 ${saved.outfit.shoes}`
+  );
+
+  const designDetails = saved.outfit.design_details
+    ? document.createElement("p")
+    : null;
+  if (designDetails) {
+    designDetails.textContent = translateText(
+      `🎨 ${saved.outfit.design_title}: ${saved.outfit.design_details}`
+    );
+  }
 
   const date = document.createElement("p");
-  date.textContent = `सेव किया: ${saved.created_at}`;
+  date.textContent = translateText(`सेव किया: ${saved.created_at}`);
 
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
-  deleteButton.textContent = "हटाएँ";
+  deleteButton.textContent = translateText("हटाएँ");
   deleteButton.addEventListener("click", () => deleteOutfit(saved.id));
 
-  card.append(title, details, date, deleteButton);
+  card.append(title, details);
+  if (designDetails) card.appendChild(designDetails);
+  card.append(date, deleteButton);
   return card;
 }
 
@@ -276,7 +574,7 @@ async function deleteOutfit(id) {
 
     await loadHistory();
   } catch (error) {
-    alert(error.message);
+    alert(translateText(error.message));
   }
 }
 
@@ -287,9 +585,19 @@ let appLanguage = localStorage.getItem("lookbook-language") || "hi";
 
 const englishText = {
   "पुरुष": "Men", "महिला": "Women",
+  "बच्चे": "Children", "बुज़ुर्ग": "Older adult",
+  "वयस्क": "Adult", "सबके लिए": "Everyone",
   "बर्थडे पार्टी": "Birthday party", "शादी की पार्टी": "Wedding party",
   "कैज़ुअल पार्टी": "Casual party", "नाइट पार्टी": "Night party",
   "कैज़ुअल": "Casual", "स्मार्ट": "Smart", "बोल्ड": "Bold",
+  "पारंपरिक पोशाक": "Traditional outfit",
+  "कोई भी स्टाइल": "Any style",
+  "साड़ी, लहंगा या सूट": "Saree, lehenga, or suit",
+  "स्ट्रेट-फिट जींस": "Straight-fit jeans",
+  "ग्रिप वाले लो-हील जूते": "Low-heel shoes with grip",
+  "कपड़ों का साइज़": "Clothing size",
+  "कोई भी / फ्री साइज़": "Any / free size",
+  "साइज़": "Size",
 
   "हल्की नीली ऑक्सफ़ोर्ड शर्ट": "Light blue Oxford shirt",
   "सफ़ेद शर्ट और नेवी ब्लेज़र": "White shirt with navy blazer",
@@ -381,27 +689,195 @@ const englishText = {
   "स्टेटमेंट नेकलेस": "Statement necklace",
   "मेटैलिक टॉप": "Metallic top",
   "बोल्ड इयररिंग्स": "Bold earrings",
+  "फ्लोरल कुर्ती": "Floral kurti",
+  "पलाज़ो पैंट": "Palazzo pants",
+  "जूतियाँ": "Juttis",
+  "छोटे झुमके": "Small jhumka earrings",
+  "कढ़ाईदार अनारकली सूट": "Embroidered Anarkali suit",
+  "झुमके": "Jhumka earrings",
+  "फ्यूज़न लहंगा चोली": "Fusion lehenga choli",
+  "हल्का उत्सवी सलवार सूट": "Light festive salwar suit",
+  "हल्का दुपट्टा": "Light dupatta",
+  "कॉटन कुर्ती": "Cotton kurti",
+  "आरामदायक जूतियाँ": "Comfortable juttis",
+  "लिनेन कुर्ता": "Linen kurta",
+  "प्रिंटेड फ्यूज़न कुर्ती": "Printed fusion kurti",
+  "मैचिंग स्कर्ट": "Matching skirt",
+  "सॉफ्ट फैब्रिक कुर्ती": "Soft-fabric kurti",
+  "आरामदायक सैंडल": "Comfortable sandals",
+  "साटन साड़ी ब्लाउज़": "Satin saree blouse",
+  "साटन साड़ी": "Satin saree",
+  "ज्वेल-टोन लहंगा चोली": "Jewel-tone lehenga choli",
+  "डिज़ाइन आइडिया": "Design idea",
+  "साड़ी डिज़ाइन": "Saree design",
+  "लहंगा डिज़ाइन": "Lehenga design",
+  "सूट डिज़ाइन": "Suit design",
+  "कुर्ती डिज़ाइन": "Kurti design",
+  "हल्की कॉटन साड़ी पर छोटे फ्लोरल प्रिंट, पतला कॉन्ट्रास्ट बॉर्डर और आरामदायक मैचिंग ब्लाउज़।": "Light cotton saree with small floral prints, a slim contrast border, and a comfortable matching blouse.",
+  "सिल्क साड़ी पर नाज़ुक ज़री बॉर्डर, सादा मैचिंग ब्लाउज़ और साफ़-सुथरी प्लीटेड ड्रेप।": "Silk saree with a delicate zari border, a simple matching blouse, and a neatly pleated drape.",
+  "ज्वेल-टोन साटन साड़ी पर उभरा हुआ एम्बेलिश्ड बॉर्डर और स्टेटमेंट ब्लाउज़।": "Jewel-tone satin saree with a detailed embellished border and a statement blouse.",
+  "हल्के फ्लोरल प्रिंट वाला फ्लोई लहंगा, सिंपल चोली और हल्का दुपट्टा।": "Flowy lehenga with a light floral print, simple choli, and lightweight dupatta.",
+  "सॉफ्ट शिमर फैब्रिक का फ्लेयर्ड लहंगा, बारीक कढ़ाई वाली चोली और मैचिंग दुपट्टा।": "Flared lehenga in soft shimmer fabric with a finely embroidered choli and matching dupatta.",
+  "ज्वेल-टोन लहंगे पर मिरर या सीक्विन वर्क, आकर्षक चोली और ड्रेप्ड दुपट्टा।": "Jewel-tone lehenga with mirror or sequin work, a statement choli, and a draped dupatta.",
+  "सांस लेने वाले कॉटन का स्ट्रेट-कट सूट, हल्का प्रिंट और सॉफ्ट कॉन्ट्रास्ट दुपट्टा।": "Straight-cut suit in breathable cotton with a light print and soft contrast dupatta.",
+  "अनारकली कट पर नाज़ुक एम्ब्रॉयडरी, साफ़ चूड़ीदार और हल्का मैचिंग दुपट्टा।": "Anarkali cut with delicate embroidery, neat churidar, and a lightweight matching dupatta.",
+  "रिच ज्वेल-टोन सूट पर कढ़ाईदार नेकलाइन, स्लीव बॉर्डर और मैचिंग दुपट्टा।": "Rich jewel-tone suit with an embroidered neckline, sleeve borders, and matching dupatta.",
+  "सॉफ्ट कॉटन कुर्ती पर छोटे फ्लोरल प्रिंट, आरामदायक पलाज़ो और सिंपल जूतियाँ।": "Soft cotton kurti with small floral prints, comfortable palazzo pants, and simple juttis.",
+  "लिनेन कुर्ती में साफ़ स्ट्रेट कट, हल्की कढ़ाई और मिनिमल एक्सेसरीज़।": "Linen kurti with a clean straight cut, subtle embroidery, and minimal accessories.",
+  "कॉन्ट्रास्ट प्रिंट या मिरर-वर्क कुर्ती के साथ फ्लोई स्कर्ट और बोल्ड इयररिंग्स।": "Kurti with contrast print or mirror work, paired with a flowy skirt and bold earrings.",
+
+  "रंगीन कॉटन टी-शर्ट": "Colorful cotton T-shirt",
+  "आरामदायक कॉलर वाली शर्ट": "Comfortable collared shirt",
+  "मज़ेदार प्रिंट वाली टी-शर्ट": "Fun printed T-shirt",
+  "हल्का उत्सवी कुर्ता": "Lightweight festive kurta",
+  "साफ़-सुथरा उत्सवी कुर्ता": "Neat festive kurta",
+  "रंगीन उत्सवी कुर्ता": "Colorful festive kurta",
+  "आरामदायक कॉटन टी-शर्ट": "Comfortable cotton T-shirt",
+  "कॉलर वाली कॉटन शर्ट": "Collared cotton shirt",
+  "प्रिंटेड शर्ट": "Printed shirt",
+  "गहरे रंग की आरामदायक टी-शर्ट": "Comfortable dark-colored T-shirt",
+  "कॉलर वाली गहरे रंग की शर्ट": "Collared dark-colored shirt",
+  "रंगीन प्रिंट वाली शर्ट": "Colorful printed shirt",
+  "सॉफ्ट कॉटन ट्राउज़र": "Soft cotton trousers",
+  "सॉफ्ट-फिट ट्राउज़र": "Soft-fit trousers",
+  "आरामदायक कॉटन ट्राउज़र": "Comfortable cotton trousers",
+  "आरामदायक पायजामा": "Comfortable pajama trousers",
+  "सॉफ्ट-फिट पायजामा": "Soft-fit pajama trousers",
+  "आरामदायक चिनो ट्राउज़र": "Comfortable chino trousers",
+  "आरामदायक कार्गो ट्राउज़र": "Comfortable cargo trousers",
+  "ग्रिप वाले स्नीकर्स": "Sneakers with grip",
+  "आरामदायक स्नीकर्स": "Comfortable sneakers",
+  "ग्रिप वाले एथनिक जूते": "Ethnic shoes with grip",
+  "आरामदायक एथनिक जूते": "Comfortable ethnic shoes",
+  "आरामदायक जूती": "Comfortable jutti",
+  "आरामदायक लो-टॉप स्नीकर्स": "Comfortable low-top sneakers",
+  "हल्की कैप": "Lightweight cap",
+  "रंगीन कैप": "Colorful cap",
+  "हल्की जैकेट": "Lightweight jacket",
+  "हल्का स्वेटर": "Lightweight sweater",
+  "हल्की नेहरू जैकेट": "Lightweight Nehru jacket",
+  "सांस लेने वाला सूती टॉप": "Breathable cotton top",
+  "इलास्टिक-कमर वाले ट्राउज़र": "Elastic-waist trousers",
+  "कुशन वाले फ्लैट जूते": "Cushioned flat shoes",
+  "हल्की घड़ी": "Lightweight watch",
+  "लिनेन शर्ट या ट्यूनिक": "Linen shirt or tunic",
+  "आसान फिटिंग वाले ट्राउज़र": "Easy-fit trousers",
+  "ग्रिप वाले आरामदायक जूते": "Comfortable shoes with grip",
+  "हल्का स्टोल": "Lightweight stole",
+  "रंगीन आरामदायक टॉप": "Colorful comfortable top",
+  "कुशन वाले लो-हील जूते": "Cushioned low-heel shoes",
+  "हल्का स्कार्फ": "Lightweight scarf",
+  "आरामदायक उत्सवी कुर्ता": "Comfortable festive kurta",
+  "कुशन वाले फ्लैट एथनिक जूते": "Cushioned flat ethnic shoes",
+  "सांस लेने वाला उत्सवी कुर्ता या ट्यूनिक": "Breathable festive kurta or tunic",
+  "ग्रिप वाले फ्लैट जूते": "Flat shoes with grip",
+  "रंगीन आरामदायक उत्सवी टॉप": "Colorful comfortable festive top",
+  "सांस लेने वाली कॉटन टी-शर्ट": "Breathable cotton T-shirt",
+  "कुशन वाले स्नीकर्स": "Cushioned sneakers",
+  "आरामदायक लो-हील जूते": "Comfortable low-heel shoes",
+  "गहरे रंग का सांस लेने वाला टॉप": "Breathable dark-colored top",
+  "आरामदायक कॉटन शॉर्ट्स": "Comfortable cotton shorts",
+  "सॉफ्ट-फिट चिनो शॉर्ट्स": "Soft-fit chino shorts",
+  "रंगीन कॉटन शॉर्ट्स": "Colorful cotton shorts",
+  "हल्के कॉटन शॉर्ट्स": "Lightweight cotton shorts",
+  "आरामदायक इलास्टिक-कमर शॉर्ट्स": "Comfortable elastic-waist shorts",
+  "सॉफ्ट-फिट शॉर्ट्स": "Soft-fit shorts",
+  "बच्चे के लिए आरामदायक गर्म परतें साथ रखें।": "Bring comfortable warm layers for the child.",
+  "बारिश में बच्चे के लिए ग्रिप वाले, पानी से बचाने वाले जूते चुनें।": "For rainy weather, choose water-resistant shoes with grip for the child.",
+  "गर्मी में बच्चे के लिए हल्के, सांस लेने वाले कपड़े चुनें।": "Choose light, breathable clothes for the child in warm weather.",
+  "ठंड में आरामदायक, हल्की परतें रखें जिन्हें आसानी से पहना जा सके।": "Choose comfortable, lightweight layers that are easy to put on in cold weather.",
+  "बारिश में ग्रिप वाले, आरामदायक जूते चुनें।": "Choose comfortable shoes with grip for rainy weather.",
+  "गर्मी में हल्के, सांस लेने वाले और आरामदायक कपड़े चुनें।": "Choose light, breathable, comfortable clothes for warm weather.",
 
   "ठंड के लिए जैकेट या ब्लेज़र साथ रखें।": "Bring a jacket or blazer for cold weather.",
   "बारिश में पानी से कम खराब होने वाले जूते चुनें।": "Choose shoes that can handle rain.",
-  "गर्मी में हल्के और आरामदायक कपड़े चुनें।": "Choose light, comfortable clothes for warm weather."
+  "गर्मी में हल्के और आरामदायक कपड़े चुनें।": "Choose light, comfortable clothes for warm weather.",
+
+  "शर्ट / टॉप": "Shirt / top", "पैंट": "Pants", "जूते": "Shoes",
+  "एक्सेसरी": "Accessory", "कपड़े का नाम": "Item name",
+  "कपड़े का प्रकार": "Item type", "किसकी अलमारी?": "Whose wardrobe?",
+  "कपड़े का नाम लिखें (अधिकतम 60 अक्षर)।": "Enter an item name (up to 60 characters).",
+  "कपड़े का सही प्रकार चुनें।": "Choose a valid item type.",
+  "यह कपड़ा किसकी अलमारी का है, सही विकल्प चुनें।": "Choose whose wardrobe this item belongs to.",
+  "रंग का नाम 30 अक्षरों से छोटा रखें।": "Keep the color name under 30 characters.",
+  "कपड़ों का सही साइज़ चुनें।": "Choose a valid clothing size.",
+  "साइज़ का विकल्प सिर्फ कपड़ों के लिए है।": "Sizes are only available for clothing.",
+  "कपड़ा अलमारी में जोड़ दिया गया।": "Item added to your wardrobe.",
+  "यह कपड़ा नहीं मिला।": "Item not found.",
+  "कपड़ा अलमारी से हटा दिया गया।": "Item removed from your wardrobe.",
+  "कृपया पहले लॉगिन करें।": "Please log in first.",
+  "GROQ_API_KEY सेट नहीं है।": "GROQ_API_KEY is not set.",
+  "फोटो विश्लेषण के लिए अनुमति दें।": "Please consent to photo analysis.",
+  "पहले अपनी फोटो चुनें।": "Choose a photo first.",
+  "पार्टी, मौसम, स्टाइल और कपड़ों के विकल्प जाँचें।": "Check the party, weather, style, and clothing options.",
+  "फोटो 5 MB से छोटी होनी चाहिए।": "The photo must be smaller than 5 MB.",
+  "JPG, PNG या WebP फोटो चुनें।": "Choose a JPG, PNG, or WebP photo.",
+  "यह सही image फ़ाइल नहीं लगती।": "This does not appear to be a valid image file.",
+  "फोटो से सुझाव नहीं बन पाया। फिर कोशिश करें।": "Could not create a suggestion from the photo. Try again.",
+  "पार्टी, मौसम, स्टाइल, किसके लिए और नीचे के कपड़े जाँचें।": "Check the party, weather, style, audience, and bottom options.",
+  "पहले सही पार्टी, मौसम, स्टाइल और कपड़ों के विकल्प चुनें।": "Choose valid party, weather, style, and clothing options first.",
+  "दिख रहे लुक की जानकारी सही नहीं है।": "The displayed look details are invalid.",
+  "लुक सेव हो गया!": "Look saved!",
+  "सेव किए लुक लोड नहीं हो पाए।": "Could not load saved looks.",
+  "यह सेव किया हुआ लुक नहीं मिला।": "Saved look not found.",
+  "लुक हटा दिया गया।": "Look deleted.",
+  "सेव किया:": "Saved:",
+  "लुक बन रहा है…": "Creating your look…",
+  "मेरा लुक सुझाओ": "Suggest my look",
+  "लुक बनाते समय समस्या आई।": "Something went wrong while creating the look.",
+  "पहले अपना लुक बनाओ।": "Create a look first.",
+  "सेव हो रहा है…": "Saving…",
+  "लुक सेव नहीं हो पाया।": "Could not save the look.",
+  "कपड़ा नहीं जुड़ पाया।": "Could not add the item.",
+  "जोड़ा जा रहा है…": "Adding…",
+  "＋ अलमारी में जोड़ो": "＋ Add to wardrobe",
+  "अलमारी लोड नहीं हो पाई।": "Could not load the wardrobe.",
+  "कपड़ा हटाया नहीं जा सका।": "Could not remove the item.",
+  "सेव किए लुक लोड नहीं हो पाए।": "Could not load saved looks.",
+  "लुक हटाया नहीं जा सका।": "Could not delete the look.",
+  "JPG, PNG या WebP फोटो चुनें।": "Choose a JPG, PNG, or WebP photo.",
+  "पहले फोटो चुनो।": "Choose a photo first.",
+  "पहले फोटो विश्लेषण की अनुमति दो।": "Consent to photo analysis first.",
+  "फोटो देखकर सुझाव बनाया जा रहा है…": "Creating a suggestion from your photo…",
+  "फोटो से सुझाव नहीं बन पाया।": "Could not create a suggestion from the photo.",
+  "तुम्हारा फोटो-आधारित लुक तैयार है।": "Your photo-based look is ready."
 };
 
 function translateText(text) {
-  if (appLanguage !== "en") return text;
+  const translations = Object.entries(englishText)
+    .sort((a, b) => b[0].length - a[0].length);
 
-  return Object.entries(englishText)
-    .sort((a, b) => b[0].length - a[0].length)
-    .reduce((value, [hindi, english]) => value.replaceAll(hindi, english), text);
+  if (appLanguage === "en") {
+    return translations.reduce(
+      (value, [hindi, english]) => value.replaceAll(hindi, english),
+      text
+    );
+  }
+
+  return translations.reduce(
+    (value, [hindi, english]) => value.replaceAll(english, hindi),
+    text
+  );
 }
 
-function setEnglish(selector, english, asHtml = false) {
+function setEnglish(selector, english, asHtml = false, hindi = null) {
   const element = document.querySelector(selector);
   if (!element) return;
 
+  if ("placeholder" in element) {
+    if (!("hindiPlaceholder" in element.dataset)) {
+      element.dataset.hindiPlaceholder = element.placeholder;
+    }
+
+    element.placeholder = appLanguage === "en"
+      ? english
+      : element.dataset.hindiPlaceholder;
+    return;
+  }
+
   const key = asHtml ? "hindiHtml" : "hindiText";
   if (!(key in element.dataset)) {
-    element.dataset[key] = asHtml ? element.innerHTML : element.textContent;
+    element.dataset[key] = hindi ?? (asHtml ? element.innerHTML : element.textContent);
   }
 
   if (appLanguage === "en") {
@@ -424,26 +900,38 @@ function applyPageLanguage() {
   localStorage.setItem("lookbook-language", appLanguage);
   document.documentElement.lang = appLanguage;
 
-  setEnglish(".topbar-note", '<span class="status-dot"></span> Your style assistant', true);
+  setEnglish(
+    ".topbar-note",
+    '<span class="status-dot"></span> Your style assistant',
+    true,
+    '<span class="status-dot"></span> आपका स्टाइल असिस्टेंट'
+  );
   setEnglish(".topbar-actions .logout-button", "Log out");
-  setEnglish(".hero-copy .eyebrow", "YOUR PLAN, YOUR STYLE");
+  setEnglish(".hero-copy .eyebrow", "YOUR PLAN, YOUR STYLE", false, "तुम्हारी पार्टी, तुम्हारा स्टाइल");
   setEnglish(".hero h1", "For the party,<br><span>the perfect look.</span>", true);
   setEnglish(".hero-description", "Plan your next outfit around the party, weather, and your mood.");
-  setEnglish(".hero-tag", "LOOK GOOD.<br>FEEL GREAT.", true);
+  setEnglish(".hero-tag", "LOOK GOOD.<br>FEEL GREAT.", true, "अच्छे दिखो।<br>खुश महसूस करो।");
 
-  setEnglish(".form-panel .eyebrow", "LET'S GET READY");
+  setEnglish(".form-panel .eyebrow", "LET'S GET READY", false, "तैयारी शुरू करें");
   setEnglish(".form-panel h2", "Tell us about the party");
   setEnglish('label[for="partyType"]', "What kind of party?");
   setEnglish('label[for="audience"]', "Who is the look for?");
+  setEnglish("#outfitTypeLabel", "Traditional outfit");
   setEnglish('label[for="style"]', "Choose a style");
   setEnglish('label[for="weather"]', "What's the weather?");
   setEnglish('label[for="bottomPreference"]', "Choose pants or shorts");
+  setEnglish('label[for="sizePreference"]', "Preferred clothing size");
+  setEnglish('label[for="photoInput"]', "Your photo (optional)", false, "अपनी फोटो (वैकल्पिक)");
   setOption('#partyType option[value="birthday"]', "🎂 Birthday party");
   setOption('#partyType option[value="wedding"]', "💐 Wedding party");
   setOption('#partyType option[value="casual"]', "🎈 Casual party");
   setOption('#partyType option[value="night"]', "🌙 Night party");
   setOption('#audience option[value="men"]', "Men");
   setOption('#audience option[value="women"]', "Women");
+  setOption('#audience option[value="children"]', "Children");
+  setOption('#audience option[value="senior"]', "Older adult");
+  setOption('#outfitType option[value="any"]', "Any style");
+  setOption('#outfitType option[value="ethnic"]', "Saree, lehenga, or suit");
   setOption('#style option[value="casual"]', "Relaxed and casual");
   setOption('#style option[value="smart"]', "Smart and classic");
   setOption('#style option[value="bold"]', "Bold and trendy");
@@ -452,11 +940,18 @@ function applyPageLanguage() {
   setOption('#weather option[value="rainy"]', "🌧️ Rainy");
   setOption('#bottomPreference option[value="trousers"]', "Long pants");
   setOption('#bottomPreference option[value="shorts"]', "Shorts");
+  setOption('#sizePreference option[value="any"]', "Any / free size");
+  setOption('#wardrobeSize option[value="any"]', "Any / free size");
+  setEnglish('label[for="wardrobeSize"]', "Clothing size");
   setEnglish(".form-panel .primary-button span:first-child", "Suggest my look");
+  setEnglish("#removePhoto", "Remove photo");
+  setEnglish("#analyzePhotoButton", "Suggest a look from photo", false, "फोटो देखकर लुक सुझाओ");
 
-  setEnglish(".result-panel .eyebrow", "MADE FOR YOUR PLAN");
+  setEnglish(".result-panel .eyebrow", "MADE FOR YOUR PLAN", false, "तुम्हारे प्लान के लिए");
   setEnglish(".result-panel h2", "Your look");
   setEnglish("#resultPlaceholder p", "Choose your party details.<br>Your look will appear here.", true);
+  setEnglish("#designIdea .eyebrow", "DESIGN INSPIRATION", false, "डिज़ाइन की झलक");
+  setEnglish("#colorIdeasTitle", "Clothing and shoe color combinations");
   setEnglish("#saveButton span", "Save this look");
   document.querySelectorAll(".outfit-item small").forEach((item, index) => {
     const labels = ["Top", "Bottom", "Shoes", "Accessory"];
@@ -464,10 +959,11 @@ function applyPageLanguage() {
     item.textContent = appLanguage === "en" ? labels[index] : original[index];
   });
 
-  setEnglish(".wardrobe-section .eyebrow", "MY CLOSET");
+  setEnglish(".wardrobe-section .eyebrow", "MY CLOSET", false, "मेरी अलमारी");
   setEnglish(".wardrobe-section h2", "My wardrobe");
   setEnglish('label[for="wardrobeName"]', "Item name");
   setEnglish('label[for="wardrobeCategory"]', "Item type");
+  setEnglish('label[for="wardrobeAudience"]', "Whose wardrobe?");
   setEnglish('label[for="wardrobeColor"]', "Color (optional)");
   setEnglish("#wardrobeName", "e.g. Oxford shirt");
   setEnglish("#wardrobeColor", "e.g. Navy blue");
@@ -476,15 +972,31 @@ function applyPageLanguage() {
   setOption('#wardrobeCategory option[value="shorts"]', "Shorts");
   setOption('#wardrobeCategory option[value="shoes"]', "Shoes");
   setOption('#wardrobeCategory option[value="accessory"]', "Accessory");
+  setOption('#wardrobeAudience option[value="adult"]', "Adult");
+  setOption('#wardrobeAudience option[value="children"]', "Children");
+  setOption('#wardrobeAudience option[value="senior"]', "Older adult");
+  setOption('#wardrobeAudience option[value="all"]', "Everyone");
   setEnglish("#wardrobeForm .primary-button", "＋ Add to wardrobe");
   setEnglish("#emptyWardrobe", "Your wardrobe is empty. Add your clothes above.");
 
-  setEnglish(".saved-section:not(.wardrobe-section) .eyebrow", "YOUR COLLECTION");
+  setEnglish(
+    ".photo-consent span",
+    "I consent to AI photo analysis. A parent or guardian must consent for a child's photo."
+  );
+  setEnglish(
+    ".photo-privacy-note",
+    "Photos are sent to Groq AI for analysis. The app does not store them."
+  );
+
+  setEnglish(".saved-section:not(.wardrobe-section) .eyebrow", "YOUR COLLECTION", false, "तुम्हारा कलेक्शन");
   setEnglish(".saved-section:not(.wardrobe-section) h2", "Saved looks");
   setEnglish("#emptyHistory", "No looks saved yet. Create and save your first look.");
-  setEnglish(".footer span:last-child", "Your style, for every party.");
+  setEnglish(".footer span:last-child", "Your style, for every party.", false, "हर पार्टी के लिए, तुम्हारा अपना स्टाइल।");
 
   if (lastOutfit) showOutfit(lastOutfit);
+  updateOutfitTypeFields();
+  renderColorCombinations();
+  translateVisibleMessages();
 
   loadWardrobe().then(translateCards);
   loadHistory().then(translateCards);
@@ -517,16 +1029,18 @@ showOutfit = function (outfit) {
   lastOutfit = outfit;
   originalShowOutfit(outfit);
 
-  if (appLanguage === "en") {
-    document.getElementById("partyName").textContent = translateText(outfit.party_name);
-    document.getElementById("styleName").textContent =
-      `${translateText(outfit.audience_name)} · ${translateText(outfit.style_name)} style`;
-    document.getElementById("outfitTop").textContent = translateText(outfit.top);
-    document.getElementById("outfitBottom").textContent = translateText(outfit.bottom);
-    document.getElementById("outfitShoes").textContent = translateText(outfit.shoes);
-    document.getElementById("outfitAccessory").textContent = translateText(outfit.accessory);
-    document.getElementById("weatherTip").textContent = translateText(outfit.weather_tip);
-  }
+  document.getElementById("partyName").textContent = translateText(outfit.party_name);
+  const audienceName = translateText(outfit.audience_name);
+  const styleName = translateText(outfit.style_name);
+  document.getElementById("styleName").textContent = appLanguage === "en"
+    ? `${audienceName} · ${styleName} style`
+    : `${audienceName} · ${styleName} स्टाइल`;
+  document.getElementById("outfitTop").textContent = translateText(outfit.top);
+  document.getElementById("outfitBottom").textContent = translateText(outfit.bottom);
+  document.getElementById("outfitShoes").textContent = translateText(outfit.shoes);
+  document.getElementById("outfitAccessory").textContent = translateText(outfit.accessory);
+  document.getElementById("weatherTip").textContent = translateText(outfit.weather_tip);
+  renderColorCombinations();
 };
 
 if (languageSelect) {
@@ -549,13 +1063,13 @@ photoInput.addEventListener("change", () => {
   if (!file) return;
 
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-    photoMessage.textContent = "JPG, PNG या WebP फोटो चुनें।";
+    photoMessage.textContent = translateText("JPG, PNG या WebP फोटो चुनें।");
     photoInput.value = "";
     return;
   }
 
   if (file.size > 5 * 1024 * 1024) {
-    photoMessage.textContent = "फोटो 5 MB से छोटी होनी चाहिए।";
+    photoMessage.textContent = translateText("फोटो 5 MB से छोटी होनी चाहिए।");
     photoInput.value = "";
     return;
   }
@@ -583,12 +1097,12 @@ analyzePhotoButton.addEventListener("click", async () => {
   const file = photoInput.files[0];
 
   if (!file) {
-    analysisMessage.textContent = "पहले फोटो चुनो।";
+    analysisMessage.textContent = translateText("पहले फोटो चुनो।");
     return;
   }
 
   if (!photoConsent.checked) {
-    analysisMessage.textContent = "पहले फोटो विश्लेषण की अनुमति दो।";
+    analysisMessage.textContent = translateText("पहले फोटो विश्लेषण की अनुमति दो।");
     return;
   }
 
@@ -597,7 +1111,9 @@ analyzePhotoButton.addEventListener("click", async () => {
     style: document.getElementById("style").value,
     weather: document.getElementById("weather").value,
     audience: document.getElementById("audience").value,
-    bottom_preference: document.getElementById("bottomPreference").value
+    outfit_type: document.getElementById("outfitType").value,
+    bottom_preference: document.getElementById("bottomPreference").value,
+    size_preference: document.getElementById("sizePreference").value
   };
 
   const formData = new FormData();
@@ -610,7 +1126,7 @@ analyzePhotoButton.addEventListener("click", async () => {
   });
 
   analyzePhotoButton.disabled = true;
-  analysisMessage.textContent = "फोटो देखकर सुझाव बनाया जा रहा है…";
+  analysisMessage.textContent = translateText("फोटो देखकर सुझाव बनाया जा रहा है…");
 
   try {
     const response = await fetch("/api/analyze-photo", {
@@ -625,9 +1141,9 @@ analyzePhotoButton.addEventListener("click", async () => {
     }
 
     showOutfit(data.outfit);
-    analysisMessage.textContent = "तुम्हारा फोटो-आधारित लुक तैयार है।";
+    analysisMessage.textContent = translateText("तुम्हारा फोटो-आधारित लुक तैयार है।");
   } catch (error) {
-    analysisMessage.textContent = error.message;
+    analysisMessage.textContent = translateText(error.message);
   } finally {
     analyzePhotoButton.disabled = false;
   }

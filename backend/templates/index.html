@@ -71,13 +71,31 @@
          <select id="audience" name="audience" required>
          <option value="men">पुरुष</option>
          <option value="women">महिला</option>
+         <option value="children">बच्चे</option>
+         <option value="senior">बुज़ुर्ग</option>
+        </select>
+        <label id="outfitTypeLabel" for="outfitType" hidden>पारंपरिक पोशाक</label>
+        <select id="outfitType" name="outfit_type" hidden>
+          <option value="any">कोई भी स्टाइल</option>
+          <option value="ethnic">साड़ी, लहंगा या सूट</option>
         </select>
         <label for="bottomPreference">नीचे क्या पहनना है?</label>
 <select id="bottomPreference" name="bottom_preference">
   <option value="trousers">लंबी पैंट</option>
   <option value="shorts">शॉर्ट्स</option>
 </select>
-            <label for="style">तुम्हारा स्टाइल</label>
+        <label for="sizePreference">कपड़ों का साइज़</label>
+        <select id="sizePreference" name="size_preference">
+          <option value="any">कोई भी / फ्री साइज़</option>
+          <option value="XS">XS</option>
+          <option value="S">S</option>
+          <option value="M">M</option>
+          <option value="L">L</option>
+          <option value="XL">XL</option>
+          <option value="XXL">XXL</option>
+          <option value="XXXL">XXXL</option>
+        </select>
+                    <label for="style">तुम्हारा स्टाइल</label>
             <select id="style" name="style" required>
               <option value="casual">आरामदायक और कैज़ुअल</option>
               <option value="smart">स्मार्ट और क्लासिक</option>
@@ -101,8 +119,9 @@
 <p id="photoMessage" class="save-message" aria-live="polite"></p>
 <label class="photo-consent">
   <input id="photoConsent" type="checkbox">
-  मैं इस फोटो को AI से विश्लेषित करवाने की अनुमति देता/देती हूँ।
+  <span>मैं इस फोटो के AI विश्लेषण की अनुमति देता/देती हूँ। बच्चे की फोटो के लिए अभिभावक की अनुमति आवश्यक है।</span>
 </label>
+<p class="photo-privacy-note">फोटो विश्लेषण के लिए Groq AI सेवा को भेजी जाएगी। ऐप इसे सेव नहीं करता।</p>
 
 <button id="analyzePhotoButton" class="secondary-button photo-analysis-button" type="button">
   फोटो देखकर लुक सुझाओ
@@ -141,7 +160,19 @@
               <div class="outfit-item"><span>👟</span><div><small>जूते</small><strong id="outfitShoes"></strong></div></div>
               <div class="outfit-item"><span>⌚</span><div><small>एक्सेसरी</small><strong id="outfitAccessory"></strong></div></div>
             </div>
+            <section id="designIdea" class="design-idea" aria-labelledby="designIdeaTitle" hidden>
+              <div id="designVisual" class="design-visual"></div>
+              <div class="design-copy">
+                <p class="eyebrow">DESIGN INSPIRATION</p>
+                <h3 id="designIdeaTitle"></h3>
+                <p id="designDetails"></p>
+              </div>
+            </section>
             <div class="weather-tip"><span>✦</span><p id="weatherTip"></p></div>
+            <section class="color-ideas" aria-labelledby="colorIdeasTitle">
+              <h3 id="colorIdeasTitle">कपड़ों और जूतों के रंगों के मेल</h3>
+              <div id="colorCombinationList" class="color-combination-list"></div>
+            </section>
             <button id="saveButton" class="secondary-button" type="button">
               ♡ <span>इस लुक को सेव करो</span>
             </button>
@@ -178,9 +209,33 @@
           </div>
 
           <div>
+            <label for="wardrobeAudience">किसकी अलमारी?</label>
+            <select id="wardrobeAudience" required>
+              <option value="adult">वयस्क</option>
+              <option value="children">बच्चे</option>
+              <option value="senior">बुज़ुर्ग</option>
+              <option value="all">सबके लिए</option>
+            </select>
+          </div>
+
+          <div>
             <label for="wardrobeColor">रंग (वैकल्पिक)</label>
             <input id="wardrobeColor" type="text" maxlength="30"
                    placeholder="जैसे: नेवी ब्लू">
+          </div>
+
+          <div id="wardrobeSizeField">
+            <label for="wardrobeSize">कपड़ों का साइज़</label>
+            <select id="wardrobeSize">
+              <option value="any">कोई भी / फ्री साइज़</option>
+              <option value="XS">XS</option>
+              <option value="S">S</option>
+              <option value="M">M</option>
+              <option value="L">L</option>
+              <option value="XL">XL</option>
+              <option value="XXL">XXL</option>
+              <option value="XXXL">XXXL</option>
+            </select>
           </div>
 
           <button class="primary-button" type="submit">＋ अलमारी में जोड़ो</button>
