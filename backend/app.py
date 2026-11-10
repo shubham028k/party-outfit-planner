@@ -461,7 +461,25 @@ def login_required(function):
         return function(*args, **kwargs)
 
     return wrapper
+
+
+def api_json_errors(function):
+    """Keep unexpected API failures in JSON and log their traceback."""
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception:
+            app.logger.exception("Unhandled error in API endpoint %s", request.path)
+            return jsonify({
+                "error": "फोटो विश्लेषण में सर्वर की समस्या आई। सर्वर लॉग देखें।"
+            }), 500
+
+    return wrapper
+
+
 @app.post("/api/analyze-photo")
+@api_json_errors
 @login_required
 def analyze_photo():
     groq_api_key = os.environ.get("GROQ_API_KEY")
@@ -652,7 +670,14 @@ STRICT LANGUAGE RULE: Write every value only in {answer_language}. Do not mix Hi
             }
         )
 
-        outfit = json.loads(response.output_text)
+        output_text = getattr(response, "output_text", None)
+        if not isinstance(output_text, str) or not output_text.strip():
+            raise ValueError("The photo model returned an empty response")
+
+        outfit = json.loads(output_text)
+        if not isinstance(outfit, dict):
+            raise ValueError("The photo model response was not a JSON object")
+
         if audience == "women" and outfit_type in ETHNIC_TYPE_OUTFITS:
             curated_outfit = make_recommendation(
                 session["user_id"], party, weather, style, audience,
@@ -669,7 +694,7 @@ STRICT LANGUAGE RULE: Write every value only in {answer_language}. Do not mix Hi
         add_ethnic_design(outfit, style, audience, outfit_type)
         return jsonify({"outfit": outfit})
 
-    except (OpenAIError, json.JSONDecodeError):
+    except (OpenAIError, json.JSONDecodeError, TypeError, ValueError):
         app.logger.exception("Photo outfit analysis failed")
         return jsonify({
             "error": "फोटो से सुझाव नहीं बन पाया। फिर कोशिश करें।"
@@ -749,6 +774,11 @@ Values:
         app.logger.exception("Outfit translation failed")
         return jsonify({
             "error": "लुक का अनुवाद नहीं हो पाया। फिर कोशिश करें।"
+        }), 502
+    except Exception:
+        app.logger.exception("Unexpected error while translating outfit")
+        return jsonify({
+            "error": "लुक का अनुवाद नहीं हो पाया। सर्वर लॉग देखें।"
         }), 502
 
 

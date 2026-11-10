@@ -13,15 +13,16 @@ const bottomPreferenceSelect = document.getElementById("bottomPreference");
 async function readJsonResponse(response) {
   const contentType = (response.headers.get("content-type") || "").toLowerCase();
   if (contentType.includes("json")) return response.json();
+  const endpoint = new URL(response.url).pathname;
 
   const message = response.status === 404
     ? (appLanguage === "en"
-      ? "The backend route is missing (404). Restart Flask or deploy the latest code."
-      : "सर्वर का नया पता नहीं मिला (404)। ऐप बंद करके फिर चलाओ या नवीनतम बदलाव तैनात करो।")
+      ? `Backend route ${endpoint} is missing (404). Restart Flask or deploy the latest code.`
+      : `Backend route ${endpoint} नहीं मिला (404)। ऐप restart करो या नवीनतम बदलाव तैनात करो।`)
     : response.status >= 500
       ? (appLanguage === "en"
-        ? `Backend error (${response.status}). Check the Flask terminal or hosting logs.`
-        : `सर्वर में समस्या (${response.status}) है। सर्वर लॉग देखो।`)
+        ? `Backend error (${response.status}) at ${endpoint}. Check the Flask terminal or hosting logs.`
+        : `Backend error (${response.status}) ${endpoint} पर आया। Flask terminal या hosting logs देखो।`)
       : (appLanguage === "en"
         ? `The server returned a web page instead of JSON (HTTP ${response.status}). Sign in again and retry.`
         : `सर्वर ने डेटा की जगह वेब पेज दिया (${response.status})। फिर लॉगिन करके कोशिश करो।`);
