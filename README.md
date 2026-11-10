@@ -4,6 +4,7 @@ A Flask-based party wardrobe planner. It includes:
 
 - `.ics` calendar import (including recurring events) and automatic recommendations for the next upcoming event
 - complete outfit suggestions from your own wardrobe, including shoes, accessories, and eyewear
+- optional personal clothing photos with a live preview and private, account-only image URLs
 - a built-in sample clothing catalog for wardrobes with missing items
 - an in-app OpenStreetMap route from the user's location to the event venue
 - optional traditional Indian outfit recommendations for women, including sarees, lehengas, and suits, with design details and an animated preview

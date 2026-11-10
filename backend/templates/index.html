@@ -269,7 +269,8 @@
           <div>
             <label for="wardrobeAudience">किसकी अलमारी?</label>
             <select id="wardrobeAudience" required>
-              <option value="adult">वयस्क</option>
+              <option value="men">पुरुष</option>
+              <option value="women">महिला</option>
               <option value="children">बच्चे</option>
               <option value="senior">बुज़ुर्ग</option>
               <option value="all">सबके लिए</option>
@@ -299,6 +300,19 @@
               <option value="7XL">7XL</option>
               <option value="8XL">8XL</option>
             </select>
+          </div>
+
+          <div class="wardrobe-image-field">
+            <label for="wardrobeImage">कपड़े की फोटो (वैकल्पिक)</label>
+            <input id="wardrobeImage" name="image" type="file"
+                   accept="image/jpeg,image/png,image/webp">
+            <small>JPG, PNG या WebP · अधिकतम 5 MB</small>
+            <div id="wardrobeImagePreviewBox" class="wardrobe-image-preview" hidden>
+              <img id="wardrobeImagePreview" alt="कपड़े की फोटो का preview">
+              <button id="removeWardrobeImage" type="button" class="text-button">
+                फोटो हटाएँ
+              </button>
+            </div>
           </div>
 
           <button class="primary-button" type="submit">＋ अलमारी में जोड़ो</button>

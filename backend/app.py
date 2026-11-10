@@ -383,7 +383,9 @@ CATEGORIES = {
     "top", "bottom", "shorts", "shoes", "accessory", "eyewear",
     "saree", "salwar", "lehenga", "kurti"
 }
-WARDROBE_AUDIENCES = {"adult", "children", "senior", "all"}
+WARDROBE_AUDIENCES = {
+    "men", "women", "adult", "children", "senior", "all"
+}
 APPAREL_CATEGORIES = {
     "top", "bottom", "shorts", "saree", "salwar", "lehenga", "kurti"
 }
@@ -398,8 +400,10 @@ FIT_PREFERENCES = {
 }
 
 
-def wardrobe_audience_for(audience):
-    return "adult" if audience in {"men", "women"} else audience
+def wardrobe_audience_options(audience):
+    if audience in {"men", "women"}:
+        return (audience, "adult")
+    return (audience,)
 
 
 def fit_note_for(audience, fit_preference):
@@ -542,18 +546,21 @@ def analyze_photo():
     except (UnidentifiedImageError, OSError, ValueError):
         return jsonify({"error": "यह सही फोटो फ़ाइल नहीं लगती।"}), 400
 
-    wardrobe_audience = wardrobe_audience_for(audience)
+    wardrobe_audiences = wardrobe_audience_options(audience)
+    audience_placeholders = ", ".join("?" for _ in wardrobe_audiences)
     with connect_db() as connection:
         items = connection.execute(
-            """SELECT name, category, color, size
+            f"""SELECT name, category, color, size
                FROM wardrobe_items
-               WHERE user_id = ? AND audience IN (?, 'all')
+               WHERE user_id = ?
+                 AND audience IN ({audience_placeholders}, 'all')
                  AND (
                     ? = 'any'
                     OR category NOT IN ('top', 'bottom', 'shorts')
                     OR size IN (?, 'any')
                  )
-               ORDER BY CASE WHEN audience = ? THEN 0 ELSE 1 END,
+               ORDER BY CASE WHEN audience = ? THEN 0
+                             WHEN audience = 'adult' THEN 1 ELSE 2 END,
                         CASE WHEN category IN ('top', 'bottom', 'shorts')
                                   AND ? != 'any' AND size = ? THEN 0
                              WHEN category IN ('top', 'bottom', 'shorts')
@@ -563,10 +570,10 @@ def analyze_photo():
                LIMIT 50""",
             (
                 session["user_id"],
-                wardrobe_audience,
+                *wardrobe_audiences,
+                audience,
                 size_preference,
                 size_preference,
-                wardrobe_audience,
                 size_preference,
                 size_preference,
                 size_preference
@@ -912,6 +919,28 @@ BUILTIN_CATALOG = [
     {"name": "पार्टी लहंगा", "category": "lehenga", "color": "हरा"}
 ]
 MAX_CALENDAR_EVENTS = 2000
+MAX_WARDROBE_IMAGE_SIZE = 5 * 1024 * 1024
+
+
+def normalize_wardrobe_image(image_data):
+    if not image_data or len(image_data) > MAX_WARDROBE_IMAGE_SIZE:
+        raise ValueError("कपड़े की फोटो 5 MB से छोटी होनी चाहिए।")
+    try:
+        image = Image.open(BytesIO(image_data))
+        if image.format not in {"JPEG", "PNG", "WEBP"}:
+            raise ValueError("JPG, PNG या WebP कपड़ों की फोटो चुनें।")
+        if image.width * image.height > 20_000_000:
+            raise ValueError("कपड़ों की फोटो का resolution बहुत बड़ा है।")
+        image.verify()
+        image = Image.open(BytesIO(image_data)).convert("RGB")
+        image.thumbnail((1200, 1200))
+        optimized = BytesIO()
+        image.save(optimized, format="JPEG", quality=85, optimize=True)
+        return optimized.getvalue()
+    except ValueError:
+        raise
+    except (UnidentifiedImageError, OSError) as error:
+        raise ValueError("यह मान्य JPG, PNG या WebP फोटो नहीं है।") from error
 
 
 def unfold_icalendar(text):
@@ -1208,19 +1237,21 @@ def route_to_event(location, origin_latitude, origin_longitude):
 def wardrobe_pick(
     user_id, category, fallback, audience, size_preference="any"
 ):
-    wardrobe_audience = wardrobe_audience_for(audience)
+    wardrobe_audiences = wardrobe_audience_options(audience)
+    audience_placeholders = ", ".join("?" for _ in wardrobe_audiences)
     with connect_db() as connection:
         items = connection.execute(
-            """SELECT name, color, size
+            f"""SELECT name, color, size
                FROM wardrobe_items
                WHERE user_id = ? AND category = ?
-                 AND audience IN (?, 'all')
+                 AND audience IN ({audience_placeholders}, 'all')
                  AND (
                     ? = 'any'
                     OR category NOT IN ('top', 'bottom', 'shorts')
                     OR size IN (?, 'any')
                  )
-               ORDER BY CASE WHEN audience = ? THEN 0 ELSE 1 END,
+               ORDER BY CASE WHEN audience = ? THEN 0
+                             WHEN audience = 'adult' THEN 1 ELSE 2 END,
                         CASE WHEN category IN ('top', 'bottom', 'shorts')
                                   AND ? != 'any' AND size = ? THEN 0
                              WHEN category IN ('top', 'bottom', 'shorts')
@@ -1231,10 +1262,10 @@ def wardrobe_pick(
             (
                 user_id,
                 category,
-                wardrobe_audience,
+                *wardrobe_audiences,
+                audience,
                 size_preference,
                 size_preference,
-                wardrobe_audience,
                 size_preference,
                 size_preference,
                 size_preference
@@ -1854,25 +1885,67 @@ def recommend():
 def get_wardrobe():
     with connect_db() as connection:
         rows = connection.execute(
-            """SELECT id, name, category, color, audience, size
+            """SELECT id, name, category, color, audience, size,
+                      image_data IS NOT NULL AS has_image
                FROM wardrobe_items
                WHERE user_id = ?
                ORDER BY id DESC""",
             (session["user_id"],)
         ).fetchall()
 
-    return jsonify({"items": [dict(row) for row in rows]})
+    items = []
+    for row in rows:
+        item = dict(row)
+        if item.pop("has_image"):
+            item["image_url"] = url_for(
+                "get_wardrobe_image", item_id=item["id"]
+            )
+        items.append(item)
+    return jsonify({"items": items})
+
+
+@app.get("/api/wardrobe/<int:item_id>/image")
+@login_required
+def get_wardrobe_image(item_id):
+    with connect_db() as connection:
+        row = connection.execute(
+            """SELECT image_data, image_mime FROM wardrobe_items
+               WHERE id = ? AND user_id = ? AND image_data IS NOT NULL""",
+            (item_id, session["user_id"])
+        ).fetchone()
+    if not row:
+        return jsonify({"error": "इस कपड़े की फोटो नहीं मिली।"}), 404
+    response = Response(row["image_data"], mimetype=row["image_mime"])
+    response.headers["Cache-Control"] = "private, max-age=3600"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @app.post("/api/wardrobe")
 @login_required
 def add_wardrobe_item():
-    data = request.get_json(silent=True) or {}
+    data = (
+        request.form
+        if request.mimetype == "multipart/form-data"
+        else request.get_json(silent=True) or {}
+    )
     name = str(data.get("name", "")).strip()
     category = data.get("category")
     color = str(data.get("color", "")).strip()
     audience = data.get("audience", "adult")
     size = data.get("size", "any")
+    image = request.files.get("image")
+    image_data = None
+    image_mime = None
+
+    if image and image.filename:
+        try:
+            image_data = normalize_wardrobe_image(
+                image.read(MAX_WARDROBE_IMAGE_SIZE + 1)
+            )
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 400
+        image_mime = "image/jpeg"
 
     if not name or len(name) > 60:
         return jsonify({
@@ -1899,8 +1972,9 @@ def add_wardrobe_item():
     with connect_db() as connection:
         cursor = connection.execute(
             """INSERT INTO wardrobe_items
-               (name, category, color, created_at, user_id, audience, size)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (name, category, color, created_at, user_id, audience, size,
+                image_data, image_mime)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 name,
                 category,
@@ -1908,7 +1982,9 @@ def add_wardrobe_item():
                 datetime.now().isoformat(timespec="seconds"),
                 session["user_id"],
                 audience,
-                size
+                size,
+                image_data,
+                image_mime
             )
         )
 

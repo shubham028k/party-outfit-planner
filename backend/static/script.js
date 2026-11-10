@@ -50,6 +50,10 @@ const wardrobeCount = document.getElementById("wardrobeCount");
 const wardrobeCategory = document.getElementById("wardrobeCategory");
 const wardrobeSizeField = document.getElementById("wardrobeSizeField");
 const wardrobeSize = document.getElementById("wardrobeSize");
+const wardrobeImageInput = document.getElementById("wardrobeImage");
+const wardrobeImagePreviewBox = document.getElementById("wardrobeImagePreviewBox");
+const wardrobeImagePreview = document.getElementById("wardrobeImagePreview");
+let wardrobeImagePreviewUrl = null;
 
 let currentSelection = null;
 let currentOutfit = null;
@@ -87,6 +91,8 @@ const categoryNames = {
 };
 
 const wardrobeAudienceNames = {
+  men: "पुरुष",
+  women: "महिला",
   adult: "वयस्क",
   children: "बच्चे",
   senior: "बुज़ुर्ग",
@@ -467,13 +473,15 @@ wardrobeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   wardrobeMessage.textContent = "";
 
-  const item = {
-    name: document.getElementById("wardrobeName").value.trim(),
-    category: document.getElementById("wardrobeCategory").value,
-    color: document.getElementById("wardrobeColor").value.trim(),
-    audience: document.getElementById("wardrobeAudience").value,
-    size: wardrobeSize.value
-  };
+  const formData = new FormData();
+  formData.set("name", document.getElementById("wardrobeName").value.trim());
+  formData.set("category", document.getElementById("wardrobeCategory").value);
+  formData.set("color", document.getElementById("wardrobeColor").value.trim());
+  formData.set("audience", document.getElementById("wardrobeAudience").value);
+  formData.set("size", wardrobeSize.value);
+  if (wardrobeImageInput.files[0]) {
+    formData.set("image", wardrobeImageInput.files[0]);
+  }
 
   const addButton = wardrobeForm.querySelector('button[type="submit"]');
   addButton.disabled = true;
@@ -482,8 +490,7 @@ wardrobeForm.addEventListener("submit", async (event) => {
   try {
     const response = await fetch("/api/wardrobe", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(item)
+      body: formData
     });
 
     const data = await readJsonResponse(response);
@@ -493,6 +500,7 @@ wardrobeForm.addEventListener("submit", async (event) => {
     }
 
     wardrobeForm.reset();
+    clearWardrobeImagePreview();
     updateWardrobeSizeField();
     wardrobeMessage.textContent = "✓ " + translateText(data.message);
     await loadWardrobe();
@@ -551,9 +559,53 @@ function createWardrobeCard(item) {
   deleteButton.textContent = translateText("हटाएँ");
   deleteButton.addEventListener("click", () => deleteWardrobeItem(item.id));
 
+  if (item.image_url) {
+    const image = document.createElement("img");
+    image.className = "wardrobe-item-image";
+    image.src = item.image_url;
+    image.alt = item.name;
+    image.loading = "lazy";
+    card.append(image);
+  }
   card.append(title, details, deleteButton);
   return card;
 }
+
+function clearWardrobeImagePreview() {
+  wardrobeImageInput.value = "";
+  wardrobeImagePreview.removeAttribute("src");
+  wardrobeImagePreviewBox.hidden = true;
+  if (wardrobeImagePreviewUrl) URL.revokeObjectURL(wardrobeImagePreviewUrl);
+  wardrobeImagePreviewUrl = null;
+}
+
+wardrobeImageInput.addEventListener("change", () => {
+  wardrobeMessage.textContent = "";
+  const image = wardrobeImageInput.files[0];
+  if (!image) {
+    clearWardrobeImagePreview();
+    return;
+  }
+  if (!["image/jpeg", "image/png", "image/webp"].includes(image.type)) {
+    wardrobeMessage.textContent = translateText("JPG, PNG या WebP कपड़ों की फोटो चुनें।");
+    clearWardrobeImagePreview();
+    return;
+  }
+  if (image.size > 5 * 1024 * 1024) {
+    wardrobeMessage.textContent = translateText("कपड़ों की फोटो 5 MB से छोटी होनी चाहिए।");
+    clearWardrobeImagePreview();
+    return;
+  }
+  if (wardrobeImagePreviewUrl) URL.revokeObjectURL(wardrobeImagePreviewUrl);
+  wardrobeImagePreviewUrl = URL.createObjectURL(image);
+  wardrobeImagePreview.src = wardrobeImagePreviewUrl;
+  wardrobeImagePreviewBox.hidden = false;
+});
+
+document.getElementById("removeWardrobeImage").addEventListener(
+  "click",
+  clearWardrobeImagePreview
+);
 
 async function deleteWardrobeItem(id) {
   wardrobeMessage.textContent = "";
@@ -1036,7 +1088,12 @@ const englishText = {
   "Map के लिए current location मान्य नहीं है।": "The current location is not valid for the map.",
   "यह calendar event नहीं मिला।": "Calendar event not found.",
   "Map route अभी नहीं बन पाया। थोड़ी देर बाद फिर कोशिश करें।": "The map route could not be created. Try again shortly.",
-  "Calendar import हुआ, लेकिन कोई आने वाला event नहीं मिला।": "The calendar was imported, but no upcoming events were found."
+  "Calendar import हुआ, लेकिन कोई आने वाला event नहीं मिला।": "The calendar was imported, but no upcoming events were found.",
+  "कपड़े की फोटो 5 MB से छोटी होनी चाहिए।": "The clothing photo must be smaller than 5 MB.",
+  "JPG, PNG या WebP कपड़ों की फोटो चुनें।": "Choose a JPG, PNG, or WebP clothing photo.",
+  "कपड़ों की फोटो का resolution बहुत बड़ा है।": "The clothing photo resolution is too large.",
+  "यह मान्य JPG, PNG या WebP फोटो नहीं है।": "This is not a valid JPG, PNG, or WebP photo.",
+  "इस कपड़े की फोटो नहीं मिली।": "The photo for this item was not found."
 };
 
 function translateText(text) {
@@ -1176,7 +1233,7 @@ function applyPageLanguage() {
   setEnglish(".wardrobe-section h2", "My wardrobe");
   setEnglish('label[for="wardrobeName"]', "Item name");
   setEnglish('label[for="wardrobeCategory"]', "Item type");
-  setEnglish('label[for="wardrobeAudience"]', "Whose wardrobe?");
+  setEnglish('label[for="wardrobeAudience"]', "Who is this item for?");
   setEnglish('label[for="wardrobeColor"]', "Color (optional)");
   setEnglish("#wardrobeName", "e.g. Oxford shirt");
   setEnglish("#wardrobeColor", "e.g. Navy blue");
@@ -1191,9 +1248,20 @@ function applyPageLanguage() {
   setOption('#wardrobeCategory option[value="lehenga"]', "Lehenga");
   setOption('#wardrobeCategory option[value="kurti"]', "Kurti");
   setOption('#wardrobeAudience option[value="adult"]', "Adult");
+  setOption('#wardrobeAudience option[value="men"]', "Men");
+  setOption('#wardrobeAudience option[value="women"]', "Women");
   setOption('#wardrobeAudience option[value="children"]', "Children");
   setOption('#wardrobeAudience option[value="senior"]', "Older adult");
   setOption('#wardrobeAudience option[value="all"]', "Everyone");
+  setEnglish('label[for="wardrobeImage"]', "Clothing photo (optional)");
+  setEnglish(".wardrobe-image-field > small", "JPG, PNG, or WebP · up to 5 MB");
+  setEnglish("#removeWardrobeImage", "Remove photo");
+  const wardrobeImageAlt = document.getElementById("wardrobeImagePreview");
+  if (wardrobeImageAlt) {
+    wardrobeImageAlt.alt = appLanguage === "en"
+      ? "Preview of the clothing photo"
+      : "कपड़े की फोटो का preview";
+  }
   setEnglish("#wardrobeForm .primary-button", "＋ Add to wardrobe");
   setEnglish("#emptyWardrobe", "Your wardrobe is empty. Add your clothes above.");
   setEnglish(".catalog-details > summary", "Browse LOOKBOOK's built-in clothing catalog");

@@ -179,6 +179,88 @@ class OutfitPlannerTests(unittest.TestCase):
         self.assertEqual(self.client.delete(f"/api/wardrobe/{item_id}").status_code, 200)
         self.assertEqual(self.client.get("/api/wardrobe").get_json()["items"], [])
 
+    def test_wardrobe_photo_upload_preview_and_user_isolation(self):
+        self.register()
+        image_buffer = BytesIO()
+        Image.new("RGB", (20, 20), "navy").save(image_buffer, format="PNG")
+        image_buffer.seek(0)
+        response = self.client.post(
+            "/api/wardrobe",
+            data={
+                "name": "Blue party shirt",
+                "category": "top",
+                "audience": "men",
+                "size": "M",
+                "image": (image_buffer, "shirt.png"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 201)
+        item_id = response.get_json()["id"]
+        item = self.client.get("/api/wardrobe").get_json()["items"][0]
+        self.assertEqual(item["audience"], "men")
+        self.assertTrue(item["image_url"].endswith(f"/{item_id}/image"))
+
+        image_response = self.client.get(item["image_url"])
+        self.assertEqual(image_response.status_code, 200)
+        self.assertEqual(image_response.mimetype, "image/jpeg")
+
+        other_client = outfit_app.app.test_client()
+        self.register(other_client, username="image_user")
+        self.assertEqual(
+            other_client.get(item["image_url"]).status_code, 404
+        )
+
+        invalid = self.client.post(
+            "/api/wardrobe",
+            data={
+                "name": "Invalid image",
+                "category": "top",
+                "audience": "women",
+                "image": (BytesIO(b"not an image"), "invalid.png"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_wardrobe_distinguishes_mens_and_womens_items_and_keeps_legacy_adult(self):
+        self.register()
+        for name, audience in (
+            ("Mens shirt", "men"),
+            ("Womens top", "women"),
+            ("Legacy adult shirt", "adult"),
+        ):
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": "top",
+                    "audience": audience,
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        men = self.client.post(
+            "/api/recommend",
+            json={
+                "party_type": "birthday",
+                "weather": "warm",
+                "style": "casual",
+                "audience": "men",
+            },
+        ).get_json()["outfit"]
+        women = self.client.post(
+            "/api/recommend",
+            json={
+                "party_type": "birthday",
+                "weather": "warm",
+                "style": "casual",
+                "audience": "women",
+            },
+        ).get_json()["outfit"]
+        self.assertIn(men["top"], {"Mens shirt", "Legacy adult shirt"})
+        self.assertIn(women["top"], {"Womens top", "Legacy adult shirt"})
+
     def test_calendar_import_plans_next_event_from_wardrobe_and_saves(self):
         self.register()
         for name, category in (

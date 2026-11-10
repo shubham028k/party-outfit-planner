@@ -643,6 +643,57 @@ select:focus,
   white-space: nowrap;
 }
 
+.wardrobe-form .wardrobe-image-field {
+  grid-column: 1 / -1;
+}
+
+.wardrobe-form .wardrobe-image-field input[type="file"] {
+  height: auto;
+  min-height: 46px;
+  padding: 9px;
+}
+
+.wardrobe-image-field > small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.wardrobe-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.wardrobe-image-preview img {
+  width: 110px;
+  height: 110px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #19172d;
+}
+
+.text-button {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--pink);
+  background: transparent;
+  cursor: pointer;
+}
+
+.wardrobe-item-image {
+  width: 100%;
+  max-height: 240px;
+  margin-bottom: 12px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #19172d;
+}
+
 .wardrobe-section .history-list {
   margin-top: 12px;
 }
