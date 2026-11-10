@@ -10,6 +10,26 @@ const outfitTypeSelect = document.getElementById("outfitType");
 const bottomPreferenceLabel = document.querySelector('label[for="bottomPreference"]');
 const bottomPreferenceSelect = document.getElementById("bottomPreference");
 
+async function readJsonResponse(response) {
+  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  if (contentType.includes("json")) return response.json();
+
+  const message = response.status === 404
+    ? (appLanguage === "en"
+      ? "The backend route is missing (404). Restart Flask or deploy the latest code."
+      : "सर्वर का नया पता नहीं मिला (404)। ऐप बंद करके फिर चलाओ या नवीनतम बदलाव तैनात करो।")
+    : response.status >= 500
+      ? (appLanguage === "en"
+        ? `Backend error (${response.status}). Check the Flask terminal or hosting logs.`
+        : `सर्वर में समस्या (${response.status}) है। सर्वर लॉग देखो।`)
+      : (appLanguage === "en"
+        ? `The server returned a web page instead of JSON (HTTP ${response.status}). Sign in again and retry.`
+        : `सर्वर ने डेटा की जगह वेब पेज दिया (${response.status})। फिर लॉगिन करके कोशिश करो।`);
+  const error = new Error(message);
+  error.code = "NON_JSON_RESPONSE";
+  throw error;
+}
+
 const wardrobeForm = document.getElementById("wardrobeForm");
 const wardrobeMessage = document.getElementById("wardrobeMessage");
 const wardrobeList = document.getElementById("wardrobeList");
@@ -333,7 +353,7 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify(currentSelection)
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.error || "लुक बनाते समय समस्या आई।");
@@ -412,7 +432,7 @@ saveButton.addEventListener("click", async () => {
       body: JSON.stringify({ ...currentSelection, outfit: currentOutfit })
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.error || "लुक सेव नहीं हो पाया।");
@@ -450,7 +470,7 @@ wardrobeForm.addEventListener("submit", async (event) => {
       body: JSON.stringify(item)
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.error || "कपड़ा नहीं जुड़ पाया।");
@@ -471,7 +491,7 @@ wardrobeForm.addEventListener("submit", async (event) => {
 async function loadWardrobe() {
   try {
     const response = await fetch("/api/wardrobe");
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.error || "अलमारी लोड नहीं हो पाई।");
@@ -527,7 +547,7 @@ async function deleteWardrobeItem(id) {
       method: "DELETE"
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.error || "कपड़ा हटाया नहीं जा सका।");
@@ -547,7 +567,7 @@ async function loadHistory() {
 
   try {
     const response = await fetch("/api/outfits");
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.error || "सेव किए लुक लोड नहीं हो पाए।");
@@ -612,7 +632,7 @@ async function deleteOutfit(id) {
       method: "DELETE"
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.error || "लुक हटाया नहीं जा सका।");
@@ -1284,7 +1304,7 @@ async function translateOutfitForDisplay(outfit, language, requestId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ outfit, language })
     });
-    const data = await response.json();
+    const data = await readJsonResponse(response);
     if (!response.ok) throw new Error(data.error || "अनुवाद पूरा नहीं हो पाया।");
     if (requestId !== outfitTranslationRequest || language !== appLanguage || lastOutfit !== outfit) return;
 
@@ -1296,9 +1316,11 @@ async function translateOutfitForDisplay(outfit, language, requestId) {
     setOutfitLanguageStatus("");
   } catch (error) {
     if (requestId !== outfitTranslationRequest || language !== appLanguage || lastOutfit !== outfit) return;
-    setOutfitLanguageStatus(language === "en"
-      ? "Some outfit text could not be translated. Create the look again in English."
-      : "कुछ कपड़ों का अनुवाद नहीं हो पाया। हिंदी में लुक फिर से बनाएँ।");
+    setOutfitLanguageStatus(error.code === "NON_JSON_RESPONSE"
+      ? error.message
+      : language === "en"
+        ? "Some outfit text could not be translated. Create the look again in English."
+        : "कुछ कपड़ों का अनुवाद नहीं हो पाया। हिंदी में लुक फिर से बनाएँ।");
   }
 }
 
@@ -1405,7 +1427,7 @@ analyzePhotoButton.addEventListener("click", async () => {
       body: formData
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.error || "फोटो से सुझाव नहीं बन पाया।");
