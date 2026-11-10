@@ -433,6 +433,13 @@ select:focus,
   line-height: 1.4;
 }
 
+.outfit-language-status {
+  margin: 10px 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .design-idea {
   display: grid;
   grid-template-columns: 132px minmax(0, 1fr);

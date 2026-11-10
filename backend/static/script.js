@@ -1179,24 +1179,139 @@ function translateCards() {
 
 const originalShowOutfit = showOutfit;
 let lastOutfit = null;
+let outfitTranslationRequest = 0;
+
+const outfitTranslationFields = [
+  "top", "bottom", "shoes", "accessory", "weather_tip", "eyewear",
+  "design_title", "design_details"
+];
+
+function hasWrongLanguageScript(text) {
+  if (appLanguage === "en") return /[\u0900-\u097F]/.test(text);
+  const withoutSizes = text.replace(/\b(?:XS|S|M|L|XL|XXL|XXXL|[4-8]XL)\b/gi, "");
+  return /[A-Za-z]{2,}/.test(withoutSizes);
+}
+
+function outfitFallbackValues(outfitType) {
+  const traditional = {
+    saree: {
+      en: ["Matching saree blouse", "Coordinated saree"],
+      hi: ["मैचिंग साड़ी ब्लाउज़", "मेल खाती साड़ी"]
+    },
+    salwar: {
+      en: ["Matching salwar suit", "Comfortable salwar pants"],
+      hi: ["मैचिंग सलवार-सूट", "आरामदायक सलवार पैंट"]
+    },
+    lehenga: {
+      en: ["Matching choli", "Coordinated lehenga"],
+      hi: ["मैचिंग चोली", "मेल खाता लहंगा"]
+    },
+    kurti: {
+      en: ["Party kurti", "Matching pants or skirt"],
+      hi: ["पार्टी कुर्ती", "मैचिंग पैंट या स्कर्ट"]
+    }
+  }[outfitType];
+  const pair = traditional?.[appLanguage];
+
+  return {
+    top: pair?.[0] || (appLanguage === "en" ? "Party-ready top" : "पार्टी के लिए उपयुक्त टॉप"),
+    bottom: pair?.[1] || (appLanguage === "en" ? "Coordinated pants" : "मैचिंग पैंट"),
+    shoes: appLanguage === "en" ? "Comfortable party shoes" : "आरामदायक पार्टी जूते",
+    accessory: appLanguage === "en" ? "Optional party accessory" : "पार्टी के लिए वैकल्पिक एक्सेसरी",
+    weather_tip: appLanguage === "en"
+      ? "Choose comfortable layers for the weather."
+      : "मौसम के अनुसार आरामदायक कपड़े चुनें।",
+    eyewear: appLanguage === "en"
+      ? "Wear your preferred glasses if needed."
+      : "ज़रूरत हो तो अपना पसंदीदा चश्मा पहनें।",
+    design_title: appLanguage === "en" ? "Design idea" : "डिज़ाइन आइडिया",
+    design_details: appLanguage === "en"
+      ? "A coordinated traditional outfit design."
+      : "पारंपरिक कपड़ों का मेल खाता डिज़ाइन।"
+  };
+}
+
+function localizeOutfitForDisplay(outfit) {
+  const localized = { ...outfit };
+  const fallback = outfitFallbackValues(currentSelection?.outfit_type);
+  let needsTranslation = false;
+
+  for (const field of outfitTranslationFields) {
+    if (typeof outfit[field] !== "string" || !outfit[field].trim()) continue;
+    const translated = translateText(outfit[field]);
+    if (hasWrongLanguageScript(translated)) {
+      localized[field] = fallback[field];
+      needsTranslation = true;
+    } else {
+      localized[field] = translated;
+    }
+  }
+
+  for (const field of ["party_name", "style_name", "audience_name"]) {
+    if (typeof outfit[field] === "string") localized[field] = translateText(outfit[field]);
+  }
+  return { outfit: localized, needsTranslation };
+}
+
+function setOutfitLanguageStatus(message) {
+  const status = document.getElementById("outfitLanguageStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.hidden = !message;
+}
+
+function renderLocalizedOutfit(outfit) {
+  currentOutfit = outfit;
+  originalShowOutfit(outfit);
+  document.getElementById("partyName").textContent = outfit.party_name;
+  document.getElementById("styleName").textContent = appLanguage === "en"
+    ? `${outfit.audience_name} · ${outfit.style_name} style`
+    : `${outfit.audience_name} · ${outfit.style_name} स्टाइल`;
+  document.getElementById("outfitTop").textContent = outfit.top;
+  document.getElementById("outfitBottom").textContent = outfit.bottom;
+  document.getElementById("outfitShoes").textContent = outfit.shoes;
+  document.getElementById("outfitAccessory").textContent = outfit.accessory;
+  document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
+  document.getElementById("weatherTip").textContent = outfit.weather_tip;
+  renderColorCombinations();
+}
+
+async function translateOutfitForDisplay(outfit, language, requestId) {
+  setOutfitLanguageStatus(language === "en" ? "Translating this look…" : "लुक का अनुवाद हो रहा है…");
+  try {
+    const response = await fetch("/api/translate-outfit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outfit, language })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "अनुवाद पूरा नहीं हो पाया।");
+    if (requestId !== outfitTranslationRequest || language !== appLanguage || lastOutfit !== outfit) return;
+
+    const translated = { ...outfit, ...data.translations };
+    const localized = localizeOutfitForDisplay(translated);
+    if (localized.needsTranslation) throw new Error("Translation was incomplete.");
+    lastOutfit = translated;
+    renderLocalizedOutfit(localized.outfit);
+    setOutfitLanguageStatus("");
+  } catch (error) {
+    if (requestId !== outfitTranslationRequest || language !== appLanguage || lastOutfit !== outfit) return;
+    setOutfitLanguageStatus(language === "en"
+      ? "Some outfit text could not be translated. Create the look again in English."
+      : "कुछ कपड़ों का अनुवाद नहीं हो पाया। हिंदी में लुक फिर से बनाएँ।");
+  }
+}
 
 showOutfit = function (outfit) {
   lastOutfit = outfit;
-  originalShowOutfit(outfit);
-
-  document.getElementById("partyName").textContent = translateText(outfit.party_name);
-  const audienceName = translateText(outfit.audience_name);
-  const styleName = translateText(outfit.style_name);
-  document.getElementById("styleName").textContent = appLanguage === "en"
-    ? `${audienceName} · ${styleName} style`
-    : `${audienceName} · ${styleName} स्टाइल`;
-  document.getElementById("outfitTop").textContent = translateText(outfit.top);
-  document.getElementById("outfitBottom").textContent = translateText(outfit.bottom);
-  document.getElementById("outfitShoes").textContent = translateText(outfit.shoes);
-  document.getElementById("outfitAccessory").textContent = translateText(outfit.accessory);
-  document.getElementById("outfitEyewear").textContent = translateText(outfit.eyewear || "—");
-  document.getElementById("weatherTip").textContent = translateText(outfit.weather_tip);
-  renderColorCombinations();
+  const localized = localizeOutfitForDisplay(outfit);
+  renderLocalizedOutfit(localized.outfit);
+  const requestId = ++outfitTranslationRequest;
+  if (localized.needsTranslation) {
+    translateOutfitForDisplay(outfit, appLanguage, requestId);
+  } else {
+    setOutfitLanguageStatus("");
+  }
 };
 
 if (languageSelect) {
