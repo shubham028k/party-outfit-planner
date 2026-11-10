@@ -887,7 +887,7 @@ def wardrobe_pick(
 ):
     wardrobe_audience = wardrobe_audience_for(audience)
     with connect_db() as connection:
-        item = connection.execute(
+        items = connection.execute(
             """SELECT name, color, size
                FROM wardrobe_items
                WHERE user_id = ? AND category = ?
