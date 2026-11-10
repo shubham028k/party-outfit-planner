@@ -27,7 +27,8 @@ function updateOutfitTypeFields() {
   outfitTypeLabel.hidden = !isWomen;
   outfitTypeSelect.hidden = !isWomen;
 
-  const useEthnicOutfit = isWomen && outfitTypeSelect.value === "ethnic";
+  if (!isWomen) outfitTypeSelect.value = "any";
+  const useEthnicOutfit = isWomen && outfitTypeSelect.value !== "any";
   bottomPreferenceLabel.hidden = useEthnicOutfit;
   bottomPreferenceSelect.hidden = useEthnicOutfit;
 }
@@ -41,7 +42,12 @@ const categoryNames = {
   bottom: "पैंट",
   shorts: "शॉर्ट्स",
   shoes: "जूते",
-  accessory: "एक्सेसरी"
+  accessory: "एक्सेसरी",
+  eyewear: "चश्मा",
+  saree: "साड़ी",
+  salwar: "सलवार-सूट",
+  lehenga: "लहंगा",
+  kurti: "कुर्ती"
 };
 
 const wardrobeAudienceNames = {
@@ -191,6 +197,13 @@ function createEthnicDesignVisual(type, colors, title) {
         ["M51 112Q80 121 109 112M44 137Q80 147 116 137", "none", "design-border"],
         ["M95 38Q120 44 131 74L117 83 105 64Z", colors[2], "design-pallu"]
       ]
+      : type === "salwar"
+        ? [
+          ["M53 30 39 36 31 63 48 68 55 52 57 119 103 119 105 52 112 68 129 63 118 36 103 30 88 39 68 39Z", colors[0], "design-suit"],
+          ["M68 39 80 54 92 39 87 119 73 119Z", colors[1], "design-detail"],
+          ["M59 117 78 117 73 158 50 158 54 143ZM84 117 103 117 110 143 114 158 90 158Z", colors[1], "design-pants"],
+          ["M105 37Q128 49 132 84L119 103 106 91 115 68Z", colors[2], "design-pallu"]
+        ]
       : [
         ["M53 30 39 36 31 63 48 68 55 52 57 119 102 119 104 52 111 68 128 63 118 36 103 30 88 39 68 39Z", colors[0], "design-suit"],
         ["M68 40 80 54 92 40 88 119 72 119Z", colors[1], "design-detail"],
@@ -274,7 +287,9 @@ function renderColorCombinations() {
 }
 
 function updateWardrobeSizeField() {
-  const isClothing = ["top", "bottom", "shorts"].includes(
+  const isClothing = [
+    "top", "bottom", "shorts", "saree", "salwar", "lehenga", "kurti"
+  ].includes(
     wardrobeCategory.value
   );
   wardrobeSizeField.hidden = !isClothing;
@@ -336,6 +351,10 @@ form.addEventListener("submit", async (event) => {
 function showOutfit(outfit) {
   currentOutfit = outfit;
   renderEthnicDesign(outfit);
+  updateOutfitItemLabels(
+    currentSelection?.audience,
+    currentSelection?.outfit_type
+  );
   document.getElementById("partyName").textContent = outfit.party_name;
   document.getElementById("styleName").textContent =
     `${outfit.audience_name} · ${outfit.style_name} स्टाइल`;
@@ -343,12 +362,38 @@ function showOutfit(outfit) {
   document.getElementById("outfitBottom").textContent = outfit.bottom;
   document.getElementById("outfitShoes").textContent = outfit.shoes;
   document.getElementById("outfitAccessory").textContent = outfit.accessory;
+  document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
 
   resultPlaceholder.hidden = true;
   outfitResult.hidden = false;
   outfitResult.classList.remove("outfit-enter");
   requestAnimationFrame(() => outfitResult.classList.add("outfit-enter"));
+}
+
+function updateOutfitItemLabels(audience, outfitType) {
+  const labelsByType = {
+    saree: ["ब्लाउज़", "साड़ी", "जूते", "एक्सेसरी", "चश्मा"],
+    salwar: ["कुर्ती / सूट", "सलवार / पैंट", "जूते", "एक्सेसरी", "चश्मा"],
+    lehenga: ["चोली", "लहंगा", "जूते", "एक्सेसरी", "चश्मा"],
+    kurti: ["कुर्ती", "पैंट / स्कर्ट", "जूते", "एक्सेसरी", "चश्मा"]
+  };
+  const labelsEnglish = {
+    saree: ["Blouse", "Saree", "Shoes", "Accessory", "Glasses"],
+    salwar: ["Kurta / suit", "Salwar / pants", "Shoes", "Accessory", "Glasses"],
+    lehenga: ["Choli", "Lehenga", "Shoes", "Accessory", "Glasses"],
+    kurti: ["Kurti", "Pants / skirt", "Shoes", "Accessory", "Glasses"]
+  };
+  const defaultHindi = ["ऊपर", "नीचे", "जूते", "एक्सेसरी", "चश्मा"];
+  const defaultEnglish = ["Top", "Bottom", "Shoes", "Accessory", "Glasses"];
+  const isTraditionalLook = audience === "women" && labelsByType[outfitType];
+  const labels = isTraditionalLook
+    ? (appLanguage === "en" ? labelsEnglish[outfitType] : labelsByType[outfitType])
+    : (appLanguage === "en" ? defaultEnglish : defaultHindi);
+
+  document.querySelectorAll(".outfit-item small").forEach((item, index) => {
+    item.textContent = labels[index] || "";
+  });
 }
 
 saveButton.addEventListener("click", async () => {
@@ -534,7 +579,8 @@ function createHistoryCard(saved) {
 
   const details = document.createElement("p");
   details.textContent = translateText(
-    `👕 ${saved.outfit.top} · 👖 ${saved.outfit.bottom} · 👟 ${saved.outfit.shoes}`
+    `👕 ${saved.outfit.top} · 👖 ${saved.outfit.bottom} · 👟 ${saved.outfit.shoes}` +
+    (saved.outfit.eyewear ? ` · 👓 ${saved.outfit.eyewear}` : "")
   );
 
   const designDetails = saved.outfit.design_details
@@ -587,7 +633,8 @@ const englishText = {
   "पुरुष": "Men", "महिला": "Women",
   "बच्चे": "Children", "बुज़ुर्ग": "Older adult",
   "वयस्क": "Adult", "सबके लिए": "Everyone",
-  "एआई": "AI", "तस्वीर": "image", "झलक": "preview",
+  "सलवार-सूट": "Salwar suit", "लहंगा": "Lehenga", "कुर्ती": "Kurti",
+  "एआई": "AI", "तस्वीर": "image", "झलक": "preview", "चश्मा": "Glasses",
   "आरामदायक इलास्टिक-कमर शॉर्ट्स": "Comfortable elastic-waist shorts",
   "आरामदायक उत्सवी कुर्ता": "Comfortable festive kurta",
   "आरामदायक एथनिक जूते": "Comfortable ethnic shoes",
@@ -726,6 +773,35 @@ const englishText = {
   "चूड़ियाँ": "Bangles",
   "साड़ी ब्लाउज़": "Saree blouse",
   "साड़ी": "Saree",
+  "फ्लोरल कॉटन साड़ी ब्लाउज़": "Floral cotton saree blouse",
+  "हल्की फ्लोरल कॉटन साड़ी": "Light floral cotton saree",
+  "फ्लैट एथनिक सैंडल": "Flat ethnic sandals",
+  "सिल्क साड़ी ब्लाउज़": "Silk saree blouse",
+  "आरामदायक ब्लॉक हील्स": "Comfortable block heels",
+  "ज्वेल-टोन साड़ी ब्लाउज़": "Jewel-tone saree blouse",
+  "बॉर्डर वाली साटन साड़ी": "Satin saree with a border",
+  "कॉटन सलवार-कुर्ती सेट": "Cotton salwar-kurti set",
+  "कॉटन सलवार और आरामदायक पैंट": "Cotton salwar with comfortable pants",
+  "कढ़ाईदार अनारकली सलवार सूट": "Embroidered Anarkali salwar suit",
+  "आरामदायक चूड़ीदार": "Comfortable churidar",
+  "ब्लॉक हील्स या फ्लैट जूती": "Block heels or flat juttis",
+  "हल्का मैचिंग दुपट्टा": "Light matching dupatta",
+  "ज्वेल-टोन सलवार सूट": "Jewel-tone salwar suit",
+  "पलाज़ो या चूड़ीदार": "Palazzo pants or churidar",
+  "कॉन्ट्रास्ट दुपट्टा": "Contrast dupatta",
+  "हल्की फ्यूज़न चोली": "Light fusion choli",
+  "फ्लोरल प्रिंट लहंगा": "Floral-print lehenga",
+  "बारीक कढ़ाईदार चोली": "Finely embroidered choli",
+  "मिरर-वर्क लहंगा स्कर्ट": "Mirror-work lehenga skirt",
+  "फ्लोई स्कर्ट": "Flowy skirt",
+  "आरामदायक लो-हील जूते": "Comfortable low-heel shoes",
+  "अगर बच्चा चश्मा पहनता है तो उसका अच्छी फिटिंग वाला अपना चश्मा रखें।": "If the child wears glasses, use their own well-fitting pair.",
+  "अपना रोज़ का चश्मा; आरामदायक फ्रेम चुनें।": "Wear your usual glasses with a comfortable frame.",
+  "ज़रूरत हो तो अपना पसंदीदा चश्मा; बाहर की पार्टी में धूप का चश्मा।": "Wear your preferred glasses if needed; choose sunglasses for an outdoor party.",
+  "सलवार-सूट डिज़ाइन": "Salwar suit design",
+  "हल्के कॉटन का आरामदायक सलवार सूट, छोटे प्रिंट और आसानी से बाँधा जाने वाला दुपट्टा।": "Comfortable light-cotton salwar suit with a small print and an easy-to-drape dupatta.",
+  "अनारकली कट सलवार सूट, नाज़ुक कढ़ाई और हल्का मैचिंग दुपट्टा।": "Anarkali-cut salwar suit with delicate embroidery and a light matching dupatta.",
+  "ज्वेल-टोन सलवार सूट, कॉन्ट्रास्ट बॉर्डर और आकर्षक दुपट्टा।": "Jewel-tone salwar suit with a contrast border and a statement dupatta.",
   "हील्स": "Heels",
   "क्लासिक ज्वेलरी": "Classic jewelry",
   "लहंगा चोली": "Lehenga choli",
@@ -987,7 +1063,10 @@ function applyPageLanguage() {
   setOption('#audience option[value="children"]', "Children");
   setOption('#audience option[value="senior"]', "Older adult");
   setOption('#outfitType option[value="any"]', "Any style");
-  setOption('#outfitType option[value="ethnic"]', "Saree, lehenga, or suit");
+  setOption('#outfitType option[value="saree"]', "Saree");
+  setOption('#outfitType option[value="salwar"]', "Salwar suit / Anarkali");
+  setOption('#outfitType option[value="lehenga"]', "Lehenga choli");
+  setOption('#outfitType option[value="kurti"]', "Kurti set");
   setOption('#style option[value="casual"]', "Relaxed and casual");
   setOption('#style option[value="smart"]', "Smart and classic");
   setOption('#style option[value="bold"]', "Bold and trendy");
@@ -1010,10 +1089,11 @@ function applyPageLanguage() {
   setEnglish("#colorIdeasTitle", "Clothing and shoe color combinations");
   setEnglish("#saveButton span", "Save this look");
   document.querySelectorAll(".outfit-item small").forEach((item, index) => {
-    const labels = ["Top", "Bottom", "Shoes", "Accessory"];
-    const original = ["ऊपर", "नीचे", "जूते", "एक्सेसरी"];
+    const labels = ["Top", "Bottom", "Shoes", "Accessory", "Glasses"];
+    const original = ["ऊपर", "नीचे", "जूते", "एक्सेसरी", "चश्मा"];
     item.textContent = appLanguage === "en" ? labels[index] : original[index];
   });
+  updateOutfitItemLabels(currentSelection?.audience, currentSelection?.outfit_type);
 
   setEnglish(".wardrobe-section .eyebrow", "MY CLOSET", false, "मेरी अलमारी");
   setEnglish(".wardrobe-section h2", "My wardrobe");
@@ -1028,6 +1108,11 @@ function applyPageLanguage() {
   setOption('#wardrobeCategory option[value="shorts"]', "Shorts");
   setOption('#wardrobeCategory option[value="shoes"]', "Shoes");
   setOption('#wardrobeCategory option[value="accessory"]', "Accessory");
+  setOption('#wardrobeCategory option[value="eyewear"]', "Glasses");
+  setOption('#wardrobeCategory option[value="saree"]', "Saree");
+  setOption('#wardrobeCategory option[value="salwar"]', "Salwar suit");
+  setOption('#wardrobeCategory option[value="lehenga"]', "Lehenga");
+  setOption('#wardrobeCategory option[value="kurti"]', "Kurti");
   setOption('#wardrobeAudience option[value="adult"]', "Adult");
   setOption('#wardrobeAudience option[value="children"]', "Children");
   setOption('#wardrobeAudience option[value="senior"]', "Older adult");
@@ -1109,6 +1194,7 @@ showOutfit = function (outfit) {
   document.getElementById("outfitBottom").textContent = translateText(outfit.bottom);
   document.getElementById("outfitShoes").textContent = translateText(outfit.shoes);
   document.getElementById("outfitAccessory").textContent = translateText(outfit.accessory);
+  document.getElementById("outfitEyewear").textContent = translateText(outfit.eyewear || "—");
   document.getElementById("weatherTip").textContent = translateText(outfit.weather_tip);
   renderColorCombinations();
 };

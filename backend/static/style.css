@@ -351,6 +351,10 @@ select:focus,
   animation-delay: 210ms;
 }
 
+.outfit-result.outfit-enter .outfit-item:nth-child(5) {
+  animation-delay: 280ms;
+}
+
 @keyframes outfit-item-reveal {
   from {
     opacity: 0;
@@ -394,6 +398,10 @@ select:focus,
   background: rgba(255, 255, 255, 0.025);
   transition: transform 180ms ease, border-color 180ms ease,
     background-color 180ms ease;
+}
+
+.outfit-item:nth-child(5) {
+  grid-column: 1 / -1;
 }
 
 .outfit-item:hover {

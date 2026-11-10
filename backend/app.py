@@ -208,6 +208,29 @@ ETHNIC_WOMEN_OUTFITS = {
     }
 }
 
+ETHNIC_TYPE_OUTFITS = {
+    "saree": {
+        "casual": ["फ्लोरल कॉटन साड़ी ब्लाउज़", "हल्की फ्लोरल कॉटन साड़ी", "फ्लैट एथनिक सैंडल", "छोटे झुमके"],
+        "smart": ["सिल्क साड़ी ब्लाउज़", "सिल्क साड़ी", "आरामदायक ब्लॉक हील्स", "क्लासिक ज्वेलरी"],
+        "bold": ["ज्वेल-टोन साड़ी ब्लाउज़", "बॉर्डर वाली साटन साड़ी", "एम्बेलिश्ड हील्स", "स्टेटमेंट ज्वेलरी"]
+    },
+    "salwar": {
+        "casual": ["कॉटन सलवार-कुर्ती सेट", "कॉटन सलवार और आरामदायक पैंट", "आरामदायक जूतियाँ", "हल्का दुपट्टा"],
+        "smart": ["कढ़ाईदार अनारकली सलवार सूट", "आरामदायक चूड़ीदार", "ब्लॉक हील्स या फ्लैट जूती", "हल्का मैचिंग दुपट्टा"],
+        "bold": ["ज्वेल-टोन सलवार सूट", "पलाज़ो या चूड़ीदार", "एम्बेलिश्ड सैंडल", "कॉन्ट्रास्ट दुपट्टा"]
+    },
+    "lehenga": {
+        "casual": ["हल्की फ्यूज़न चोली", "फ्लोरल प्रिंट लहंगा", "फ्लैट एथनिक सैंडल", "हल्का दुपट्टा"],
+        "smart": ["बारीक कढ़ाईदार चोली", "फ्लेयर्ड लहंगा", "आरामदायक ब्लॉक हील्स", "क्लासिक ज्वेलरी"],
+        "bold": ["ज्वेल-टोन लहंगा चोली", "मिरर-वर्क लहंगा स्कर्ट", "एम्बेलिश्ड हील्स", "स्टेटमेंट ज्वेलरी"]
+    },
+    "kurti": {
+        "casual": ["कॉटन कुर्ती", "पलाज़ो पैंट", "आरामदायक जूतियाँ", "छोटे झुमके"],
+        "smart": ["लिनेन कुर्ती", "स्ट्रेट-फिट ट्राउज़र", "आरामदायक लो-हील जूते", "मिनिमल नेकलेस"],
+        "bold": ["प्रिंटेड फ्यूज़न कुर्ती", "फ्लोई स्कर्ट", "एम्बेलिश्ड सैंडल", "बोल्ड इयररिंग्स"]
+    }
+}
+
 ETHNIC_DESIGN_TEMPLATES = {
     "saree": {
         "title": "साड़ी डिज़ाइन",
@@ -231,6 +254,14 @@ ETHNIC_DESIGN_TEMPLATES = {
             "casual": "सांस लेने वाले कॉटन का स्ट्रेट-कट सूट, हल्का प्रिंट और सॉफ्ट कॉन्ट्रास्ट दुपट्टा।",
             "smart": "अनारकली कट पर नाज़ुक एम्ब्रॉयडरी, साफ़ चूड़ीदार और हल्का मैचिंग दुपट्टा।",
             "bold": "रिच ज्वेल-टोन सूट पर कढ़ाईदार नेकलाइन, स्लीव बॉर्डर और मैचिंग दुपट्टा।"
+        }
+    },
+    "salwar": {
+        "title": "सलवार-सूट डिज़ाइन",
+        "details": {
+            "casual": "हल्के कॉटन का आरामदायक सलवार सूट, छोटे प्रिंट और आसानी से बाँधा जाने वाला दुपट्टा।",
+            "smart": "अनारकली कट सलवार सूट, नाज़ुक कढ़ाई और हल्का मैचिंग दुपट्टा।",
+            "bold": "ज्वेल-टोन सलवार सूट, कॉन्ट्रास्ट बॉर्डर और आकर्षक दुपट्टा।"
         }
     },
     "kurti": {
@@ -260,7 +291,8 @@ BOTTOM_NAMES = {
     "trousers": "लंबी पैंट",
     "shorts": "शॉर्ट्स"
 }
-OUTFIT_TYPES = {"any", "ethnic"}
+OUTFIT_TYPES = {"any", "ethnic", "saree", "salwar", "lehenga", "kurti"}
+ETHNIC_OUTFIT_TYPES = {"ethnic", "saree", "salwar", "lehenga", "kurti"}
 
 SHORTS_OUTFITS = {
     "men": {
@@ -344,9 +376,14 @@ STYLE_NAMES = {
     "smart": "स्मार्ट",
     "bold": "बोल्ड"
 }
-CATEGORIES = {"top", "bottom", "shorts", "shoes", "accessory"}
+CATEGORIES = {
+    "top", "bottom", "shorts", "shoes", "accessory", "eyewear",
+    "saree", "salwar", "lehenga", "kurti"
+}
 WARDROBE_AUDIENCES = {"adult", "children", "senior", "all"}
-APPAREL_CATEGORIES = {"top", "bottom", "shorts"}
+APPAREL_CATEGORIES = {
+    "top", "bottom", "shorts", "saree", "salwar", "lehenga", "kurti"
+}
 CLOTHING_SIZES = {
     "any", "XS", "S", "M", "L", "XL", "XXL", "XXXL",
     "4XL", "5XL", "6XL", "7XL", "8XL"
@@ -377,15 +414,16 @@ def fit_note_for(audience, fit_preference):
 
 
 def add_ethnic_design(outfit, style, audience, outfit_type):
-    if audience != "women" or outfit_type != "ethnic":
+    if audience != "women" or outfit_type not in ETHNIC_OUTFIT_TYPES:
         return outfit
 
-    top = outfit["top"]
-    if "साड़ी" in top:
+    if outfit_type in {"saree", "salwar", "lehenga", "kurti"}:
+        design_type = outfit_type
+    elif "साड़ी" in outfit["top"]:
         design_type = "saree"
-    elif "लहंगा" in top:
+    elif "लहंगा" in outfit["top"]:
         design_type = "lehenga"
-    elif any(term in top for term in ("सूट", "अनारकली", "सलवार")):
+    elif any(term in outfit["top"] for term in ("सूट", "अनारकली", "सलवार")):
         design_type = "suit"
     else:
         design_type = "kurti"
@@ -537,10 +575,16 @@ def analyze_photo():
             "Prefer wardrobe clothing in this size or free size."
         )
     )
-    uses_ethnic_wear = audience == "women" and outfit_type == "ethnic"
+    uses_ethnic_wear = audience == "women" and outfit_type in ETHNIC_OUTFIT_TYPES
+    requested_ethnic_outfit = {
+        "saree": "Recommend a saree outfit specifically.",
+        "salwar": "Recommend a salwar suit or Anarkali suit specifically.",
+        "lehenga": "Recommend a lehenga choli specifically.",
+        "kurti": "Recommend a kurti set specifically."
+    }.get(outfit_type, "")
     outfit_guidance = (
-        "Recommend a traditional Indian ethnic outfit such as a saree, "
-        "lehenga, salwar suit, or kurta set. Do not recommend shorts."
+        f"Recommend a traditional Indian outfit. {requested_ethnic_outfit} "
+        "Do not recommend shorts."
         if uses_ethnic_wear
         else "Choose a suitable outfit for the selected occasion and style."
     )
@@ -612,6 +656,9 @@ STRICT LANGUAGE RULE: Write every value only in {answer_language}. Do not mix Hi
         outfit["party_name"] = PARTY_NAMES[party]
         outfit["style_name"] = STYLE_NAMES[style]
         outfit["audience_name"] = AUDIENCE_NAMES[audience]
+        outfit["eyewear"] = wardrobe_pick(
+            session["user_id"], "eyewear", eyewear_suggestion(audience), audience
+        )
         add_ethnic_design(outfit, style, audience, outfit_type)
         return jsonify({"outfit": outfit})
 
@@ -765,22 +812,41 @@ def wardrobe_pick(
     return item_name
 
 
+def eyewear_suggestion(audience):
+    if audience == "children":
+        return "अगर बच्चा चश्मा पहनता है तो उसका अच्छी फिटिंग वाला अपना चश्मा रखें।"
+    if audience == "senior":
+        return "अपना रोज़ का चश्मा; आरामदायक फ्रेम चुनें।"
+    return "ज़रूरत हो तो अपना पसंदीदा चश्मा; बाहर की पार्टी में धूप का चश्मा।"
+
+
 def make_recommendation(
     user_id, party_type, weather, style, audience,
     bottom_preference="trousers", size_preference="any", outfit_type="any"
 ):
-    if audience == "women" and outfit_type == "ethnic":
+    uses_ethnic_wear = audience == "women" and outfit_type in ETHNIC_OUTFIT_TYPES
+    if audience == "women" and outfit_type in ETHNIC_TYPE_OUTFITS:
+        defaults = ETHNIC_TYPE_OUTFITS[outfit_type][style]
+    elif audience == "women" and outfit_type == "ethnic":
         outfit_options = ETHNIC_WOMEN_OUTFITS
     else:
         outfit_options = AGE_GROUP_OUTFITS.get(
             audience,
             WOMEN_OUTFITS if audience == "women" else OUTFITS
         )
-    defaults = outfit_options[party_type][style]
+    if not (audience == "women" and outfit_type in ETHNIC_TYPE_OUTFITS):
+        defaults = outfit_options[party_type][style]
 
-    if audience == "women" and outfit_type == "ethnic":
+    if uses_ethnic_wear:
+        ethnic_bottom_category = {
+            "saree": "saree",
+            "salwar": "salwar",
+            "lehenga": "lehenga",
+            "kurti": "bottom"
+        }.get(outfit_type, "bottom")
         bottom = wardrobe_pick(
-            user_id, "bottom", defaults[1], audience, size_preference
+            user_id, ethnic_bottom_category, defaults[1], audience,
+            size_preference
         )
     elif bottom_preference == "shorts":
         bottom = wardrobe_pick(
@@ -802,6 +868,9 @@ def make_recommendation(
         "bottom": bottom,
         "shoes": wardrobe_pick(user_id, "shoes", defaults[2], audience),
         "accessory": wardrobe_pick(user_id, "accessory", defaults[3], audience),
+        "eyewear": wardrobe_pick(
+            user_id, "eyewear", eyewear_suggestion(audience), audience
+        ),
         "party_name": PARTY_NAMES[party_type],
         "style_name": STYLE_NAMES[style],
         "audience_name": AUDIENCE_NAMES[audience]
@@ -1261,6 +1330,17 @@ def save_outfit():
             return jsonify({"error": "दिख रहे लुक की जानकारी सही नहीं है।"}), 400
 
         outfit = {field: supplied_outfit[field].strip() for field in outfit_fields}
+        supplied_eyewear = supplied_outfit.get("eyewear")
+        if supplied_eyewear is not None and (
+            not isinstance(supplied_eyewear, str)
+            or len(supplied_eyewear) > 300
+        ):
+            return jsonify({"error": "चश्मे की जानकारी सही नहीं है।"}), 400
+        outfit["eyewear"] = (
+            supplied_eyewear.strip()
+            if isinstance(supplied_eyewear, str) and supplied_eyewear.strip()
+            else eyewear_suggestion(audience)
+        )
         outfit.update({
             "party_name": PARTY_NAMES[party],
             "style_name": STYLE_NAMES[style],
