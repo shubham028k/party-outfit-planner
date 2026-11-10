@@ -587,6 +587,7 @@ const englishText = {
   "पुरुष": "Men", "महिला": "Women",
   "बच्चे": "Children", "बुज़ुर्ग": "Older adult",
   "वयस्क": "Adult", "सबके लिए": "Everyone",
+  "एआई": "AI", "तस्वीर": "image", "झलक": "preview",
   "आरामदायक इलास्टिक-कमर शॉर्ट्स": "Comfortable elastic-waist shorts",
   "आरामदायक उत्सवी कुर्ता": "Comfortable festive kurta",
   "आरामदायक एथनिक जूते": "Comfortable ethnic shoes",
@@ -1036,12 +1037,26 @@ function applyPageLanguage() {
 
   setEnglish(
     ".photo-consent span",
-    "I consent to AI photo analysis. A parent or guardian must consent for a child's photo."
+    "I consent to AI photo analysis. A parent or guardian must consent for a child's photo.",
+    false,
+    "मैं इस फोटो के एआई विश्लेषण की अनुमति देता/देती हूँ। बच्चे की फोटो के लिए अभिभावक की अनुमति आवश्यक है।"
   );
   setEnglish(
     ".photo-privacy-note",
-    "Photos are sent to Groq AI for analysis. The app does not store them."
+    "Photos are sent to Groq's AI service for analysis. The app does not store them.",
+    false,
+    "फोटो विश्लेषण के लिए इसे Groq की एआई सेवा को भेजा जाएगा। ऐप फोटो सेव नहीं करता।"
   );
+
+  document.title = appLanguage === "en"
+    ? "Party Outfit Planner · LOOKBOOK"
+    : "पार्टी आउटफिट प्लानर · LOOKBOOK";
+  const photoPreview = document.getElementById("photoPreview");
+  if (photoPreview) {
+    photoPreview.alt = appLanguage === "en"
+      ? "Preview of your uploaded photo"
+      : "अपलोड की गई फोटो की झलक";
+  }
 
   setEnglish(".saved-section:not(.wardrobe-section) .eyebrow", "YOUR COLLECTION", false, "तुम्हारा कलेक्शन");
   setEnglish(".saved-section:not(.wardrobe-section) h2", "Saved looks");

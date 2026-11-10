@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#17152b">
-  <title>Party Outfit Planner</title>
+  <title>पार्टी आउटफिट प्लानर · LOOKBOOK</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -94,6 +94,11 @@
           <option value="XL">XL</option>
           <option value="XXL">XXL</option>
           <option value="XXXL">XXXL</option>
+          <option value="4XL">4XL</option>
+          <option value="5XL">5XL</option>
+          <option value="6XL">6XL</option>
+          <option value="7XL">7XL</option>
+          <option value="8XL">8XL</option>
         </select>
                     <label for="style">तुम्हारा स्टाइल</label>
             <select id="style" name="style" required>
@@ -112,16 +117,16 @@
 <input id="photoInput" type="file" accept="image/png,image/jpeg,image/webp">
 
 <div id="photoPreviewBox" class="photo-preview-box" hidden>
-  <img id="photoPreview" alt="अपलोड की गई फोटो का preview">
+  <img id="photoPreview" alt="अपलोड की गई फोटो की झलक">
   <button id="removePhoto" type="button">फोटो हटाएँ</button>
 </div>
 
 <p id="photoMessage" class="save-message" aria-live="polite"></p>
 <label class="photo-consent">
   <input id="photoConsent" type="checkbox">
-  <span>मैं इस फोटो के AI विश्लेषण की अनुमति देता/देती हूँ। बच्चे की फोटो के लिए अभिभावक की अनुमति आवश्यक है।</span>
+  <span>मैं इस फोटो के एआई विश्लेषण की अनुमति देता/देती हूँ। बच्चे की फोटो के लिए अभिभावक की अनुमति आवश्यक है।</span>
 </label>
-<p class="photo-privacy-note">फोटो विश्लेषण के लिए Groq AI सेवा को भेजी जाएगी। ऐप इसे सेव नहीं करता।</p>
+<p class="photo-privacy-note">फोटो विश्लेषण के लिए इसे Groq की एआई सेवा को भेजा जाएगा। ऐप फोटो सेव नहीं करता।</p>
 
 <button id="analyzePhotoButton" class="secondary-button photo-analysis-button" type="button">
   फोटो देखकर लुक सुझाओ
@@ -235,6 +240,11 @@
               <option value="XL">XL</option>
               <option value="XXL">XXL</option>
               <option value="XXXL">XXXL</option>
+              <option value="4XL">4XL</option>
+              <option value="5XL">5XL</option>
+              <option value="6XL">6XL</option>
+              <option value="7XL">7XL</option>
+              <option value="8XL">8XL</option>
             </select>
           </div>
 

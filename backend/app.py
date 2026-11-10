@@ -347,7 +347,10 @@ STYLE_NAMES = {
 CATEGORIES = {"top", "bottom", "shorts", "shoes", "accessory"}
 WARDROBE_AUDIENCES = {"adult", "children", "senior", "all"}
 APPAREL_CATEGORIES = {"top", "bottom", "shorts"}
-CLOTHING_SIZES = {"any", "XS", "S", "M", "L", "XL", "XXL", "XXXL"}
+CLOTHING_SIZES = {
+    "any", "XS", "S", "M", "L", "XL", "XXL", "XXXL",
+    "4XL", "5XL", "6XL", "7XL", "8XL"
+}
 FIT_PREFERENCES = {
     "regular": "नियमित फिट",
     "relaxed": "आरामदायक ढीला फिट",
@@ -476,7 +479,7 @@ def analyze_photo():
         ).decode("utf-8")
 
     except (UnidentifiedImageError, OSError, ValueError):
-        return jsonify({"error": "यह सही image फ़ाइल नहीं लगती।"}), 400
+        return jsonify({"error": "यह सही फोटो फ़ाइल नहीं लगती।"}), 400
 
     wardrobe_audience = wardrobe_audience_for(audience)
     with connect_db() as connection:
@@ -516,6 +519,34 @@ def analyze_photo():
     ) or "यूज़र की अलमारी में अभी कोई कपड़ा दर्ज नहीं है।"
 
     answer_language = "English" if language == "en" else "Hindi"
+    audience_guidance = {
+        "children": (
+            "Choose comfortable, age-appropriate clothes and secure, "
+            "well-fitting shoes. Avoid high heels and small detachable accessories."
+        ),
+        "senior": (
+            "Prioritize comfort, breathable layers, easy-to-wear closures, "
+            "and stable flat or low-heel footwear."
+        )
+    }.get(audience, "Use practical, comfortable party styling.")
+    size_guidance = (
+        "There is no preferred clothing size; any wardrobe size may be used."
+        if size_preference == "any"
+        else (
+            f"Preferred clothing size: {size_preference}. "
+            "Prefer wardrobe clothing in this size or free size."
+        )
+    )
+    uses_ethnic_wear = audience == "women" and outfit_type == "ethnic"
+    outfit_guidance = (
+        "Recommend a traditional Indian ethnic outfit such as a saree, "
+        "lehenga, salwar suit, or kurta set. Do not recommend shorts."
+        if uses_ethnic_wear
+        else "Choose a suitable outfit for the selected occasion and style."
+    )
+    effective_bottom_preference = (
+        "trousers" if uses_ethnic_wear else bottom_preference
+    )
     prompt = f"""
 You are a practical personal fashion stylist.
 Use the uploaded photo only for visible outfit colors and styling context.
@@ -534,7 +565,7 @@ User's wardrobe:
 
 Recommend a coordinated top, bottom, shoes, accessory, and weather tip.
 Prefer items from the user's wardrobe when suitable.
-Write all values in {answer_language}.
+STRICT LANGUAGE RULE: Write every value only in {answer_language}. Do not mix Hindi and English in a value. For Hindi, use Hindi words and Devanagari script for descriptions; keep clothing-size codes and brand names unchanged.
 """
 
     schema = {
@@ -738,7 +769,13 @@ def make_recommendation(
     user_id, party_type, weather, style, audience,
     bottom_preference="trousers", size_preference="any", outfit_type="any"
 ):
-    outfit_options = WOMEN_OUTFITS if audience == "women" else OUTFITS
+    if audience == "women" and outfit_type == "ethnic":
+        outfit_options = ETHNIC_WOMEN_OUTFITS
+    else:
+        outfit_options = AGE_GROUP_OUTFITS.get(
+            audience,
+            WOMEN_OUTFITS if audience == "women" else OUTFITS
+        )
     defaults = outfit_options[party_type][style]
 
     if audience == "women" and outfit_type == "ethnic":
