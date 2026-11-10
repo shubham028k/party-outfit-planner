@@ -9,8 +9,9 @@ from pathlib import Path
 from datetime import datetime, time, timedelta, timezone
 import sqlite3
 import json
-import re
+import math
 import os
+import re
 import secrets
 import uuid
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -1180,7 +1181,7 @@ def auto_plan_for_event(user_id, event):
 
 
 def fetch_map_json(url):
-    map_request = Request(
+    external_request = Request(
         url,
         headers={
             "Accept": "application/json",
@@ -1188,12 +1189,14 @@ def fetch_map_json(url):
         }
     )
     try:
-        with urlopen(map_request, timeout=12) as response:
+        with urlopen(external_request, timeout=12) as response:
             body = response.read(2 * 1024 * 1024 + 1)
     except HTTPError as error:
-        raise RuntimeError(f"Map service returned HTTP {error.code}.") from error
+        raise RuntimeError(
+            f"External service returned HTTP {error.code}."
+        ) from error
     except (URLError, TimeoutError) as error:
-        raise RuntimeError("Map service is temporarily unavailable.") from error
+        raise RuntimeError("External service is temporarily unavailable.") from error
     if len(body) > 2 * 1024 * 1024:
         raise RuntimeError("Map service response was too large.")
     try:
@@ -1234,14 +1237,110 @@ def route_to_event(location, origin_latitude, origin_longitude):
     }
 
 
+def weather_for_event(location, event_date):
+    try:
+        requested_date = datetime.strptime(event_date, "%Y-%m-%d").date()
+    except (TypeError, ValueError) as error:
+        raise ValueError("कार्यक्रम की सही तारीख चुनें।") from error
+
+    today = datetime.now().date()
+    forecast_end = today + timedelta(days=15)
+    if requested_date < today:
+        raise ValueError("कार्यक्रम की तारीख आज या आने वाले दिनों में होनी चाहिए।")
+    if requested_date > forecast_end:
+        raise ValueError(
+            "अभी मौसम का अनुमान अगले 16 दिनों तक उपलब्ध है। पास की तारीख चुनें।"
+        )
+
+    geocode_url = (
+        "https://nominatim.openstreetmap.org/search?"
+        + urlencode({"q": location, "format": "jsonv2", "limit": 1})
+    )
+    places = fetch_map_json(geocode_url)
+    if not isinstance(places, list):
+        raise RuntimeError("Location service returned invalid data.")
+    if not places:
+        raise ValueError("यह शहर या venue map पर नहीं मिला।")
+    try:
+        latitude = float(places[0]["lat"])
+        longitude = float(places[0]["lon"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise RuntimeError("Location service ने गलत coordinates दिए।") from error
+    if (
+        not math.isfinite(latitude)
+        or not math.isfinite(longitude)
+        or not (-90 <= latitude <= 90)
+        or not (-180 <= longitude <= 180)
+    ):
+        raise RuntimeError("Location service ने गलत coordinates दिए।")
+
+    forecast_url = (
+        "https://api.open-meteo.com/v1/forecast?"
+        + urlencode({
+            "latitude": latitude,
+            "longitude": longitude,
+            "daily": (
+                "temperature_2m_max,temperature_2m_min,"
+                "precipitation_probability_max,weather_code"
+            ),
+            "timezone": "auto",
+            "forecast_days": 16
+        })
+    )
+    forecast = fetch_map_json(forecast_url)
+    if not isinstance(forecast, dict):
+        raise RuntimeError("मौसम सेवा ने गलत forecast data दिया।")
+    daily = forecast.get("daily", {})
+    if not isinstance(daily, dict):
+        raise RuntimeError("मौसम सेवा ने गलत daily forecast दिया।")
+    dates = daily.get("time", [])
+    if not isinstance(dates, list) or requested_date.isoformat() not in dates:
+        raise RuntimeError("मौसम सेवा ने इस तारीख का अनुमान नहीं दिया।")
+    index = dates.index(requested_date.isoformat())
+    try:
+        maximum = float(daily["temperature_2m_max"][index])
+        minimum = float(daily["temperature_2m_min"][index])
+        precipitation = float(daily["precipitation_probability_max"][index])
+        weather_code = int(daily["weather_code"][index])
+    except (IndexError, KeyError, TypeError, ValueError) as error:
+        raise RuntimeError("मौसम सेवा ने अधूरा अनुमान दिया।") from error
+    if (
+        not all(math.isfinite(value) for value in (maximum, minimum, precipitation))
+        or not 0 <= precipitation <= 100
+        or maximum < minimum
+        or not 0 <= weather_code <= 99
+    ):
+        raise RuntimeError("मौसम सेवा ने अधूरा अनुमान दिया।")
+
+    rainy_codes = {51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99}
+    if weather_code in rainy_codes or precipitation >= 50:
+        condition = "rainy"
+    elif minimum <= 12 or (minimum + maximum) / 2 <= 17:
+        condition = "cold"
+    else:
+        condition = "warm"
+
+    return {
+        "condition": condition,
+        "temperature_min": minimum,
+        "temperature_max": maximum,
+        "precipitation_probability": precipitation,
+        "weather_code": weather_code,
+        "latitude": latitude,
+        "longitude": longitude
+    }
+
+
 def wardrobe_pick(
-    user_id, category, fallback, audience, size_preference="any"
+    user_id, category, fallback, audience, size_preference="any",
+    include_image=False
 ):
     wardrobe_audiences = wardrobe_audience_options(audience)
     audience_placeholders = ", ".join("?" for _ in wardrobe_audiences)
     with connect_db() as connection:
         items = connection.execute(
-            f"""SELECT name, color, size
+            f"""SELECT id, name, color, size,
+                      image_data IS NOT NULL AS has_image
                FROM wardrobe_items
                WHERE user_id = ? AND category = ?
                  AND audience IN ({audience_placeholders}, 'all')
@@ -1263,9 +1362,9 @@ def wardrobe_pick(
                 user_id,
                 category,
                 *wardrobe_audiences,
+                size_preference,
+                size_preference,
                 audience,
-                size_preference,
-                size_preference,
                 size_preference,
                 size_preference,
                 size_preference
@@ -1295,12 +1394,16 @@ def wardrobe_pick(
     ), None)
 
     if not item:
-        return fallback
+        return (fallback, None) if include_image else fallback
 
     item_name = f"{item['color']} {item['name']}".strip()
     if category in APPAREL_CATEGORIES and item["size"] != "any":
-        return f"{item_name} ({item['size']})"
-    return item_name
+        item_name = f"{item_name} ({item['size']})"
+    image_url = (
+        url_for("get_wardrobe_image", item_id=item["id"])
+        if item["has_image"] else None
+    )
+    return (item_name, image_url) if include_image else item_name
 
 
 def eyewear_suggestion(audience):
@@ -1335,33 +1438,54 @@ def make_recommendation(
             "lehenga": "lehenga",
             "kurti": "bottom"
         }.get(outfit_type, "bottom")
-        bottom = wardrobe_pick(
+        bottom, bottom_image = wardrobe_pick(
             user_id, ethnic_bottom_category, defaults[1], audience,
-            size_preference
+            size_preference, include_image=True
         )
     elif bottom_preference == "shorts":
-        bottom = wardrobe_pick(
+        bottom, bottom_image = wardrobe_pick(
             user_id,
             "shorts",
             SHORTS_OUTFITS[audience][style],
             audience,
-            size_preference
+            size_preference,
+            include_image=True
         )
     else:
-        bottom = wardrobe_pick(
-            user_id, "bottom", defaults[1], audience, size_preference
+        bottom, bottom_image = wardrobe_pick(
+            user_id, "bottom", defaults[1], audience, size_preference,
+            include_image=True
         )
 
+    top, top_image = wardrobe_pick(
+        user_id, "top", defaults[0], audience, size_preference,
+        include_image=True
+    )
+    shoes, shoes_image = wardrobe_pick(
+        user_id, "shoes", defaults[2], audience, include_image=True
+    )
+    accessory, accessory_image = wardrobe_pick(
+        user_id, "accessory", defaults[3], audience, include_image=True
+    )
+    eyewear, eyewear_image = wardrobe_pick(
+        user_id, "eyewear", eyewear_suggestion(audience), audience,
+        include_image=True
+    )
     outfit = {
-        "top": wardrobe_pick(
-            user_id, "top", defaults[0], audience, size_preference
-        ),
+        "top": top,
         "bottom": bottom,
-        "shoes": wardrobe_pick(user_id, "shoes", defaults[2], audience),
-        "accessory": wardrobe_pick(user_id, "accessory", defaults[3], audience),
-        "eyewear": wardrobe_pick(
-            user_id, "eyewear", eyewear_suggestion(audience), audience
-        ),
+        "shoes": shoes,
+        "accessory": accessory,
+        "eyewear": eyewear,
+        "item_images": {
+            key: value for key, value in {
+                "top": top_image,
+                "bottom": bottom_image,
+                "shoes": shoes_image,
+                "accessory": accessory_image,
+                "eyewear": eyewear_image
+            }.items() if value
+        },
         "party_name": PARTY_NAMES[party_type],
         "style_name": STYLE_NAMES[style],
         "audience_name": AUDIENCE_NAMES[audience]
@@ -1880,6 +2004,107 @@ def recommend():
     return jsonify({"outfit": outfit})
 
 
+@app.post("/api/plan")
+@login_required
+def plan_party_outfit():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "पार्टी की जानकारी सही नहीं है।"}), 400
+    party = data.get("party_type")
+    event_date = data.get("event_date")
+    location = data.get("location")
+    audience = data.get("audience")
+
+    if (
+        not isinstance(party, str)
+        or party not in PARTY_NAMES
+        or not isinstance(audience, str)
+        or audience not in AUDIENCE_NAMES
+        or not isinstance(event_date, str)
+        or not isinstance(location, str)
+        or not location.strip()
+        or len(location.strip()) > 100
+    ):
+        return jsonify({
+            "error": "पार्टी, तारीख, जगह और किसके लिए लुक है—ये जानकारी भरें।"
+        }), 400
+
+    try:
+        weather = weather_for_event(location.strip(), event_date)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    except (RuntimeError, KeyError, TypeError) as error:
+        app.logger.warning("Unable to get event weather: %s", error)
+        return jsonify({
+            "error": "इस जगह का मौसम अभी नहीं मिल पाया। जगह जाँचें और फिर कोशिश करें।"
+        }), 502
+
+    style = {
+        "wedding": "smart",
+        "birthday": "bold",
+        "casual": "casual",
+        "night": "bold"
+    }[party]
+    outfit = make_recommendation(
+        session["user_id"], party, weather["condition"], style, audience
+    )
+    outfit.update({
+        "location": location.strip(),
+        "event_date": event_date,
+        "weather_details": weather
+    })
+    return jsonify({
+        "outfit": outfit,
+        "selection": {
+            "party_type": party,
+            "event_date": event_date,
+            "location": location.strip(),
+            "audience": audience,
+            "style": style,
+            "weather": weather["condition"],
+            "bottom_preference": "trousers",
+            "size_preference": "any",
+            "outfit_type": "any"
+        }
+    })
+
+
+@app.post("/api/route")
+@login_required
+def get_manual_event_route():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Map की जानकारी सही नहीं है।"}), 400
+    location = data.get("location")
+    latitude = data.get("latitude")
+    longitude = data.get("longitude")
+    if (
+        not isinstance(location, str)
+        or not location.strip()
+        or len(location.strip()) > 100
+        or not isinstance(latitude, (int, float))
+        or isinstance(latitude, bool)
+        or not isinstance(longitude, (int, float))
+        or isinstance(longitude, bool)
+        or not (-90 <= latitude <= 90)
+        or not (-180 <= longitude <= 180)
+    ):
+        return jsonify({"error": "Map के लिए जगह और current location जाँचें।"}), 400
+
+    try:
+        route = route_to_event(
+            location.strip(), float(latitude), float(longitude)
+        )
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 422
+    except (RuntimeError, KeyError, TypeError) as error:
+        app.logger.warning("Unable to create event route: %s", error)
+        return jsonify({
+            "error": "Map route अभी नहीं बन पाया। थोड़ी देर बाद फिर कोशिश करें।"
+        }), 502
+    return jsonify(route)
+
+
 @app.get("/api/wardrobe")
 @login_required
 def get_wardrobe():
@@ -2022,6 +2247,7 @@ def save_outfit():
     size_preference = data.get("size_preference", "any")
     location = data.get("location", "")
     outfit_type = data.get("outfit_type", "any")
+    event_date = data.get("event_date")
 
     if (
         party not in PARTY_NAMES
@@ -2035,6 +2261,14 @@ def save_outfit():
         or len(location) > 100
         or not isinstance(outfit_type, str)
         or outfit_type not in OUTFIT_TYPES
+        or (
+            event_date is not None
+            and (
+                not isinstance(event_date, str)
+                or len(event_date) != 10
+                or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", event_date)
+            )
+        )
     ):
         return jsonify({
             "error": "पहले सही पार्टी, मौसम, स्टाइल और कपड़ों के विकल्प चुनें।"
@@ -2064,6 +2298,39 @@ def save_outfit():
             else eyewear_suggestion(audience)
         )
         outfit["location"] = location.strip()
+        if event_date:
+            try:
+                datetime.strptime(event_date, "%Y-%m-%d")
+            except ValueError:
+                return jsonify({"error": "कार्यक्रम की तारीख सही नहीं है।"}), 400
+            outfit["event_date"] = event_date
+
+        supplied_images = supplied_outfit.get("item_images", {})
+        if not isinstance(supplied_images, dict) or len(supplied_images) > 5:
+            return jsonify({"error": "लुक की फोटो जानकारी सही नहीं है।"}), 400
+        safe_images = {}
+        for field, image_url in supplied_images.items():
+            match = (
+                re.fullmatch(r"/api/wardrobe/(\d+)/image", image_url)
+                if field in {"top", "bottom", "shoes", "accessory", "eyewear"}
+                and isinstance(image_url, str)
+                else None
+            )
+            if not match:
+                return jsonify({"error": "लुक की फोटो जानकारी सही नहीं है।"}), 400
+            with connect_db() as connection:
+                item = connection.execute(
+                    """SELECT id FROM wardrobe_items
+                       WHERE id = ? AND user_id = ? AND image_data IS NOT NULL""",
+                    (int(match.group(1)), session["user_id"])
+                ).fetchone()
+            if not item:
+                return jsonify({"error": "अलमारी की फोटो नहीं मिली।"}), 400
+            safe_images[field] = url_for(
+                "get_wardrobe_image", item_id=item["id"]
+            )
+        if safe_images:
+            outfit["item_images"] = safe_images
         outfit.update({
             "party_name": PARTY_NAMES[party],
             "style_name": STYLE_NAMES[style],

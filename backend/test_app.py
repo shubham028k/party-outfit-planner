@@ -96,6 +96,128 @@ class OutfitPlannerTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_party_plan_uses_forecast_and_returns_private_wardrobe_photos(self):
+        self.register()
+        image_buffer = BytesIO()
+        Image.new("RGB", (20, 20), "navy").save(image_buffer, format="PNG")
+        image_data = image_buffer.getvalue()
+        for item in (
+            ("Blue party shirt", "top", "men"),
+            ("Black trousers", "bottom", "men"),
+            ("Leather shoes", "shoes", "men")
+        ):
+            response = self.client.post(
+                "/api/wardrobe",
+                data={
+                    "name": item[0],
+                    "category": item[1],
+                    "audience": item[2],
+                    "size": "M" if item[1] in {"top", "bottom"} else "any",
+                    "image": (BytesIO(image_data), f"{item[1]}.png")
+                },
+                content_type="multipart/form-data",
+            )
+            self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            {
+                item["category"]
+                for item in self.client.get("/api/wardrobe").get_json()["items"]
+            },
+            {"top", "bottom", "shoes"}
+        )
+
+        forecast = {
+            "condition": "rainy",
+            "temperature_min": 18,
+            "temperature_max": 27,
+            "precipitation_probability": 70,
+            "weather_code": 61,
+            "latitude": 26.9,
+            "longitude": 75.8
+        }
+        with patch.object(outfit_app, "weather_for_event", return_value=forecast):
+            response = self.client.post(
+                "/api/plan",
+                json={
+                    "party_type": "wedding",
+                    "event_date": (datetime.now().date() + timedelta(days=2)).isoformat(),
+                    "location": "Jaipur",
+                    "audience": "men"
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["selection"]["weather"], "rainy")
+        self.assertEqual(data["outfit"]["weather_details"], forecast)
+        self.assertEqual(
+            set(data["outfit"]["item_images"]),
+            {"top", "bottom", "shoes"},
+            data["outfit"]
+        )
+        self.assertTrue(
+            data["outfit"]["item_images"]["top"].startswith("/api/wardrobe/")
+        )
+        saved = self.client.post(
+            "/api/outfits",
+            json={**data["selection"], "outfit": data["outfit"]}
+        )
+        self.assertEqual(saved.status_code, 201)
+        stored = self.client.get("/api/outfits").get_json()["outfits"][0]["outfit"]
+        self.assertEqual(stored["event_date"], data["selection"]["event_date"])
+        self.assertEqual(stored["item_images"], data["outfit"]["item_images"])
+
+    def test_weather_lookup_rejects_dates_without_a_supported_forecast(self):
+        today = datetime.now().date()
+        with self.assertRaisesRegex(ValueError, "आज या आने वाले दिनों"):
+            outfit_app.weather_for_event("Jaipur", (today - timedelta(days=1)).isoformat())
+        with self.assertRaisesRegex(ValueError, "अगले 16 दिनों"):
+            outfit_app.weather_for_event("Jaipur", (today + timedelta(days=16)).isoformat())
+
+    def test_weather_lookup_uses_geocoded_coordinates_and_actual_daily_data(self):
+        event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        geocoding = [{"lat": "26.9", "lon": "75.8"}]
+        forecast = {
+            "daily": {
+                "time": [event_date],
+                "temperature_2m_max": [29],
+                "temperature_2m_min": [17],
+                "precipitation_probability_max": [20],
+                "weather_code": [2]
+            }
+        }
+        with patch.object(
+            outfit_app, "fetch_map_json", side_effect=[geocoding, forecast]
+        ) as fetch:
+            result = outfit_app.weather_for_event("Jaipur", event_date)
+
+        self.assertEqual(result["condition"], "warm")
+        self.assertEqual((result["temperature_min"], result["temperature_max"]), (17, 29))
+        self.assertEqual(fetch.call_count, 2)
+        self.assertIn("api.open-meteo.com", fetch.call_args_list[1].args[0])
+
+    def test_manual_route_uses_the_user_entered_venue(self):
+        self.register()
+        route = {
+            "geometry": {"type": "LineString", "coordinates": []},
+            "distance_meters": 1200,
+            "duration_seconds": 300,
+            "destination": {"latitude": 26.9, "longitude": 75.8}
+        }
+        with patch.object(outfit_app, "route_to_event", return_value=route) as route_mock:
+            response = self.client.post(
+                "/api/route",
+                json={
+                    "location": "Jaipur venue",
+                    "latitude": 26.91,
+                    "longitude": 75.79
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), route)
+        route_mock.assert_called_once_with("Jaipur venue", 26.91, 75.79)
+
     def test_women_can_choose_ethnic_outfits(self):
         self.register()
         for party, style, expected in (

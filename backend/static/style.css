@@ -8,6 +8,30 @@
   --line: rgba(255, 255, 255, 0.1);
 }
 
+.outfit-item .outfit-visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 30px;
+}
+
+.outfit-item .outfit-visual.has-wardrobe-image {
+  background: transparent;
+}
+
+.outfit-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -615,6 +639,20 @@ select:focus,
   line-height: 1.5;
 }
 
+.saved-look-images {
+  display: flex;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.saved-look-images img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
 .history-card button {
   margin-top: 10px;
   padding: 7px 10px;
@@ -715,65 +753,7 @@ select:focus,
   letter-spacing: 1.5px;
 }
 
-.calendar-planner {
-  min-height: 0;
-  margin-bottom: 18px;
-}
-
-.calendar-intro,
-.calendar-privacy-note {
-  max-width: 760px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.calendar-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.6fr);
-  align-items: end;
-  gap: 12px 18px;
-  max-width: 760px;
-  margin: 18px 0 0;
-}
-
-.calendar-form label {
-  grid-column: 1 / -1;
-  margin-bottom: -8px;
-}
-
-.calendar-form input {
-  min-width: 0;
-  width: 100%;
-  min-height: 46px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--text);
-  background: #19172d;
-}
-
-.calendar-form input::file-selector-button {
-  margin-right: 10px;
-  padding: 7px 10px;
-  border: 0;
-  border-radius: 7px;
-  color: #24192d;
-  background: var(--lavender);
-  cursor: pointer;
-}
-
-.calendar-form .primary-button {
-  min-height: 46px;
-  margin: 0;
-}
-
-.calendar-privacy-note {
-  margin: 12px 0 0;
-  font-size: 11px;
-}
-
-.calendar-event {
+.event-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -785,24 +765,22 @@ select:focus,
   background: rgba(183, 162, 255, 0.06);
 }
 
-.calendar-event h3 {
+.event-summary h3 {
   margin: 0 0 5px;
   font-size: 18px;
 }
 
-.calendar-event .eyebrow,
-.calendar-event-time,
-.calendar-event-location {
+.event-summary .eyebrow,
+.event-time {
   margin: 0 0 6px;
 }
 
-.calendar-event-time,
-.calendar-event-location {
+.event-time {
   color: var(--muted);
   font-size: 12px;
 }
 
-.calendar-event .secondary-button {
+.event-summary .secondary-button {
   width: auto;
   min-width: 220px;
   justify-content: center;
@@ -828,39 +806,8 @@ select:focus,
   z-index: 0;
 }
 
-.manual-planner {
-  align-self: start;
-  min-height: 0;
-}
-
-.manual-planner-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.manual-planner-summary::-webkit-details-marker,
 .catalog-details > summary::-webkit-details-marker {
   display: none;
-}
-
-.manual-planner-summary .eyebrow {
-  display: block;
-}
-
-.manual-planner-summary strong {
-  font-size: 16px;
-}
-
-.manual-planner-content {
-  margin-top: 24px;
-}
-
-.manual-planner:not([open]) .manual-planner-summary {
-  margin: 0;
 }
 
 .catalog-details {
@@ -954,19 +901,13 @@ select:focus,
     grid-template-columns: 1fr 1fr;
   }
 
-  .calendar-event {
+  .event-summary {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .calendar-event .secondary-button {
+  .event-summary .secondary-button {
     width: 100%;
-  }
-}
-
-@media (max-width: 560px) {
-  .calendar-form {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -1067,69 +1008,6 @@ select:focus,
   white-space: nowrap;
   border: 0;
 }
-#photoInput {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--text);
-  background: #19172d;
-}
-
-.photo-preview-box {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 12px;
-}
-
-.photo-preview-box[hidden] {
-  display: none;
-}
-
-#photoPreview {
-  width: 96px;
-  height: 110px;
-  object-fit: cover;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-
-#removePhoto {
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--pink);
-  background: transparent;
-  cursor: pointer;
-}
-.photo-consent {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  margin: 14px 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.photo-consent input {
-  width: auto;
-  height: auto;
-  margin-top: 3px;
-}
-
-.photo-privacy-note {
-  margin: -6px 0 12px;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.photo-analysis-button {
-  margin: 12px 0;
-}
-
 .color-ideas {
   margin: 16px 0;
 }

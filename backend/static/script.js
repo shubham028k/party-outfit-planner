@@ -4,21 +4,14 @@ const saveMessage = document.getElementById("saveMessage");
 const saveButton = document.getElementById("saveButton");
 const resultPlaceholder = document.getElementById("resultPlaceholder");
 const outfitResult = document.getElementById("outfitResult");
-const audienceSelect = document.getElementById("audience");
-const outfitTypeLabel = document.getElementById("outfitTypeLabel");
-const outfitTypeSelect = document.getElementById("outfitType");
-const bottomPreferenceLabel = document.querySelector('label[for="bottomPreference"]');
-const bottomPreferenceSelect = document.getElementById("bottomPreference");
 const locationInput = document.getElementById("location");
-const calendarForm = document.getElementById("calendarForm");
-const calendarFile = document.getElementById("calendarFile");
-const calendarMessage = document.getElementById("calendarMessage");
-const calendarEventPanel = document.getElementById("calendarEvent");
+const eventDateInput = document.getElementById("eventDate");
+const eventSummary = document.getElementById("eventSummary");
 const routeButton = document.getElementById("routeButton");
 const routeMessage = document.getElementById("routeMessage");
 const routeMapElement = document.getElementById("routeMap");
 const routeSummary = document.getElementById("routeSummary");
-let currentCalendarEvent = null;
+let currentEventLocation = "";
 let routeMapInstance = null;
 
 async function readJsonResponse(response) {
@@ -57,25 +50,27 @@ let wardrobeImagePreviewUrl = null;
 
 let currentSelection = null;
 let currentOutfit = null;
+let currentEvent = null;
 
-function updateOutfitTypeFields() {
-  const isWomen = audienceSelect.value === "women";
-  outfitTypeLabel.hidden = !isWomen;
-  outfitTypeSelect.hidden = !isWomen;
+const today = new Date();
+const maxForecastDate = new Date(today);
+maxForecastDate.setDate(maxForecastDate.getDate() + 15);
+const toDateInputValue = (date) => {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+};
+eventDateInput.min = toDateInputValue(today);
+eventDateInput.max = toDateInputValue(maxForecastDate);
 
-  if (!isWomen) outfitTypeSelect.value = "any";
-  const useEthnicOutfit = isWomen && outfitTypeSelect.value !== "any";
-  bottomPreferenceLabel.hidden = useEthnicOutfit;
-  bottomPreferenceSelect.hidden = useEthnicOutfit;
+form.addEventListener("input", invalidateCurrentLook);
+form.addEventListener("change", invalidateCurrentLook);
+
+function invalidateCurrentLook() {
+  if (!currentSelection) return;
+  currentSelection = null;
+  saveButton.disabled = true;
+  saveMessage.textContent = translateText("तुमने जानकारी बदली है; लुक फिर से बनाओ।");
 }
-
-audienceSelect.addEventListener("change", updateOutfitTypeFields);
-outfitTypeSelect.addEventListener("change", updateOutfitTypeFields);
-updateOutfitTypeFields();
-
-locationInput.addEventListener("input", () => {
-  if (currentSelection) currentSelection.location = locationInput.value.trim();
-});
 
 const categoryNames = {
   top: "शर्ट / टॉप",
@@ -343,7 +338,7 @@ updateWardrobeSizeField();
 
 function translateVisibleMessages() {
   document.querySelectorAll(
-    "#errorMessage, #saveMessage, #wardrobeMessage, #photoMessage, #analysisMessage"
+    "#errorMessage, #saveMessage, #routeMessage, #wardrobeMessage"
   ).forEach((element) => {
     element.textContent = translateText(element.textContent);
   });
@@ -354,25 +349,25 @@ form.addEventListener("submit", async (event) => {
   errorMessage.textContent = "";
   saveMessage.textContent = "";
 
-  currentSelection = {
+  const selection = {
     party_type: document.getElementById("partyType").value,
-    style: document.getElementById("style").value,
-    weather: document.getElementById("weather").value,
-    audience: document.getElementById("audience").value,
-    outfit_type: document.getElementById("outfitType").value,
-    bottom_preference: document.getElementById("bottomPreference").value,
-    location: locationInput.value.trim()
+    event_date: eventDateInput.value,
+    location: locationInput.value.trim(),
+    audience: document.getElementById("audience").value
   };
+  currentSelection = null;
+  currentOutfit = null;
+  saveButton.disabled = true;
 
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
-  button.querySelector("span").textContent = translateText("लुक बन रहा है…");
+  button.querySelector("span").textContent = translateText("मौसम और लुक देख रहे हैं…");
 
   try {
-    const response = await fetch("/api/recommend", {
+    const response = await fetch("/api/plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(currentSelection)
+      body: JSON.stringify(selection)
     });
 
     const data = await readJsonResponse(response);
@@ -381,12 +376,20 @@ form.addEventListener("submit", async (event) => {
       throw new Error(data.error || "लुक बनाते समय समस्या आई।");
     }
 
+    currentSelection = data.selection;
+    saveButton.disabled = false;
+    showEventSummary({
+      party_type: currentSelection.party_type,
+      event_date: currentSelection.event_date,
+      location: currentSelection.location,
+      weather: data.outfit.weather_details
+    });
     showOutfit(data.outfit);
   } catch (error) {
     errorMessage.textContent = translateText(error.message);
   } finally {
     button.disabled = false;
-    button.querySelector("span").textContent = translateText("मेरा लुक सुझाओ");
+    button.querySelector("span").textContent = translateText("मेरी अलमारी से लुक सुझाओ");
   }
 });
 
@@ -406,6 +409,28 @@ function showOutfit(outfit) {
   document.getElementById("outfitAccessory").textContent = outfit.accessory;
   document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
+  const imageFields = {
+    outfitTopImage: "top",
+    outfitBottomImage: "bottom",
+    outfitShoesImage: "shoes",
+    outfitAccessoryImage: "accessory",
+    outfitEyewearImage: "eyewear"
+  };
+  for (const [elementId, field] of Object.entries(imageFields)) {
+    const image = document.getElementById(elementId);
+    const icon = image.parentElement;
+    if (outfit.item_images?.[field]) {
+      image.src = outfit.item_images[field];
+      image.alt = outfit[field];
+      image.hidden = false;
+      icon.classList.add("has-wardrobe-image");
+    } else {
+      image.removeAttribute("src");
+      image.alt = "";
+      image.hidden = true;
+      icon.classList.remove("has-wardrobe-image");
+    }
+  }
 
   resultPlaceholder.hidden = true;
   outfitResult.hidden = false;
@@ -681,14 +706,28 @@ function createHistoryCard(saved) {
   }
 
   const date = document.createElement("p");
-  date.textContent = translateText(`सेव किया: ${saved.created_at}`);
+  const eventDate = saved.outfit.event_date
+    ? `${saved.outfit.event_date} · `
+    : "";
+  date.textContent = translateText(`${eventDate}सेव किया: ${saved.created_at}`);
 
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.textContent = translateText("हटाएँ");
   deleteButton.addEventListener("click", () => deleteOutfit(saved.id));
 
+  const images = document.createElement("div");
+  images.className = "saved-look-images";
+  for (const [field, imageUrl] of Object.entries(saved.outfit.item_images || {})) {
+    const image = document.createElement("img");
+    image.src = imageUrl;
+    image.alt = saved.outfit[field] || field;
+    image.loading = "lazy";
+    images.append(image);
+  }
+
   card.append(title, details);
+  if (images.childElementCount) card.appendChild(images);
   if (designDetails) card.appendChild(designDetails);
   card.append(date, deleteButton);
   return card;
@@ -1012,6 +1051,25 @@ const englishText = {
   "ठंड के लिए जैकेट या ब्लेज़र साथ रखें।": "Bring a jacket or blazer for cold weather.",
   "बारिश में पानी से कम खराब होने वाले जूते चुनें।": "Choose shoes that can handle rain.",
   "गर्मी में हल्के और आरामदायक कपड़े चुनें।": "Choose light, comfortable clothes for warm weather.",
+  "मेरी अलमारी से लुक सुझाओ": "Suggest a look from my wardrobe",
+  "मौसम और लुक देख रहे हैं…": "Checking the weather and planning your look…",
+  "अभी मौसम का अनुमान अगले 16 दिनों तक उपलब्ध है। पास की तारीख चुनें।": "Weather forecasts are currently available only for the next 16 days. Choose a nearer date.",
+  "कार्यक्रम की तारीख आज या आने वाले दिनों में होनी चाहिए।": "The event date must be today or a future date.",
+  "कार्यक्रम की सही तारीख चुनें।": "Choose a valid event date.",
+  "यह शहर या venue map पर नहीं मिला।": "This city or venue could not be found on the map.",
+  "मौसम सेवा ने इस तारीख का अनुमान नहीं दिया।": "The weather service has no forecast for this date.",
+  "मौसम सेवा ने अधूरा अनुमान दिया।": "The weather service returned an incomplete forecast.",
+  "इस जगह का मौसम अभी नहीं मिल पाया। जगह जाँचें और फिर कोशिश करें।": "The weather for this location could not be retrieved. Check the location and try again.",
+  "पार्टी, तारीख, जगह और किसके लिए लुक है—ये जानकारी भरें।": "Enter the occasion, date, location, and who the look is for.",
+  "पार्टी की जानकारी सही नहीं है।": "The party details are invalid.",
+  "Map की जानकारी सही नहीं है।": "The map details are invalid.",
+  "Map के लिए जगह और current location जाँचें।": "Check the venue and current location for the map.",
+  "तुमने जानकारी बदली है; लुक फिर से बनाओ।": "You changed the details; create the look again.",
+  "कार्यक्रम की तारीख सही नहीं है।": "The event date is invalid.",
+  "लुक की फोटो जानकारी सही नहीं है।": "The outfit photo information is invalid.",
+  "अलमारी की फोटो नहीं मिली।": "A wardrobe photo could not be found.",
+  "शादी की पार्टी": "Wedding party",
+  "पार्टी / समारोह": "Party / celebration",
 
   "शर्ट / टॉप": "Shirt / top", "पैंट": "Pants", "जूते": "Shoes",
   "एक्सेसरी": "Accessory", "कपड़े का नाम": "Item name",
@@ -1027,7 +1085,6 @@ const englishText = {
   "कपड़ा अलमारी से हटा दिया गया।": "Item removed from your wardrobe.",
   "कृपया पहले लॉगिन करें।": "Please log in first.",
   "GROQ_API_KEY सेट नहीं है।": "GROQ_API_KEY is not set.",
-  "फोटो विश्लेषण के लिए अनुमति दें।": "Please consent to photo analysis.",
   "पहले अपनी फोटो चुनें।": "Choose a photo first.",
   "पार्टी, मौसम, स्टाइल और कपड़ों के विकल्प जाँचें।": "Check the party, weather, style, and clothing options.",
   "फोटो 5 MB से छोटी होनी चाहिए।": "The photo must be smaller than 5 MB.",
@@ -1042,8 +1099,6 @@ const englishText = {
   "यह सेव किया हुआ लुक नहीं मिला।": "Saved look not found.",
   "लुक हटा दिया गया।": "Look deleted.",
   "सेव किया:": "Saved:",
-  "लुक बन रहा है…": "Creating your look…",
-  "मेरा लुक सुझाओ": "Suggest my look",
   "लुक बनाते समय समस्या आई।": "Something went wrong while creating the look.",
   "पहले अपना लुक बनाओ।": "Create a look first.",
   "सेव हो रहा है…": "Saving…",
@@ -1056,39 +1111,21 @@ const englishText = {
   "सेव किए लुक लोड नहीं हो पाए।": "Could not load saved looks.",
   "लुक हटाया नहीं जा सका।": "Could not delete the look.",
   "JPG, PNG या WebP फोटो चुनें।": "Choose a JPG, PNG, or WebP photo.",
-  "पहले फोटो चुनो।": "Choose a photo first.",
-  "पहले फोटो विश्लेषण की अनुमति दो।": "Consent to photo analysis first.",
-  "फोटो देखकर सुझाव बनाया जा रहा है…": "Creating a suggestion from your photo…",
-  "फोटो से सुझाव नहीं बन पाया।": "Could not create a suggestion from the photo.",
-  "तुम्हारा फोटो-आधारित लुक तैयार है।": "Your photo-based look is ready.",
   "मेरी जगह से रास्ता दिखाओ": "Show route from my location",
-  "Calendar import करके look बनाओ": "Import calendar and plan my look",
   "इस browser में location की सुविधा उपलब्ध नहीं है।": "This browser does not support location access.",
   "Location की अनुमति नहीं मिली। Browser में अनुमति देकर फिर कोशिश करें।": "Location permission was denied. Allow it in your browser and retry.",
   "आपकी current location नहीं मिल पाई। उपलब्ध होने पर फिर कोशिश करें।": "Could not read your current location. Retry when location is available.",
-  "Calendar import हो रहा है…": "Importing calendar…",
   "LOOKBOOK के अंदर का sample कपड़ों का catalog देखें": "Browse LOOKBOOK's built-in clothing catalog",
   "पूरी sample अलमारी जोड़ें": "Add the full sample wardrobe",
   "sample items आपकी अलमारी में जोड़ दिए गए।": "sample items were added to your wardrobe.",
   "आपकी अलमारी में sample items पहले से हैं।": "Sample items are already in your wardrobe.",
   "Map library load नहीं हुई। पेज refresh करके फिर कोशिश करें।": "The map library did not load. Refresh the page and retry.",
-  "अगले event का look नहीं बन पाया।": "Could not create a look for the next event.",
-  "Calendar import नहीं हुआ।": "The calendar could not be imported.",
   "Sample wardrobe add नहीं हुई।": "Could not add the sample wardrobe.",
   "Catalog load नहीं हो पाया।": "Could not load the catalog.",
   "Map route नहीं बन पाया।": "Could not create the map route.",
-  "अपनी .ics calendar फ़ाइल चुनें।": "Choose your .ics calendar file.",
-  "सिर्फ .ics calendar फ़ाइल इस्तेमाल करें।": "Choose an .ics calendar file.",
-  "डिवाइस का timezone पहचाना नहीं गया।": "The device timezone could not be recognized.",
-  "इस .ics फ़ाइल में कोई calendar event नहीं मिला।": "No calendar events were found in this .ics file.",
-  "पहले future events वाली .ics calendar फ़ाइल import करें।": "Import an .ics calendar file with upcoming events first.",
   "कार्यक्रम का venue map पर नहीं मिला।": "The event venue could not be found on the map.",
   "इस स्थान तक कोई सड़क मार्ग नहीं मिला।": "No driving route was found to this location.",
-  "इस calendar event में venue/location नहीं दिया गया है।": "This calendar event has no venue or location.",
-  "Map के लिए current location मान्य नहीं है।": "The current location is not valid for the map.",
-  "यह calendar event नहीं मिला।": "Calendar event not found.",
   "Map route अभी नहीं बन पाया। थोड़ी देर बाद फिर कोशिश करें।": "The map route could not be created. Try again shortly.",
-  "Calendar import हुआ, लेकिन कोई आने वाला event नहीं मिला।": "The calendar was imported, but no upcoming events were found.",
   "कपड़े की फोटो 5 MB से छोटी होनी चाहिए।": "The clothing photo must be smaller than 5 MB.",
   "JPG, PNG या WebP कपड़ों की फोटो चुनें।": "Choose a JPG, PNG, or WebP clothing photo.",
   "कपड़ों की फोटो का resolution बहुत बड़ा है।": "The clothing photo resolution is too large.",
@@ -1152,6 +1189,7 @@ function applyPageLanguage() {
   appLanguage = languageSelect.value;
   localStorage.setItem("lookbook-language", appLanguage);
   document.documentElement.lang = appLanguage;
+  if (currentEvent) renderEventSummary(currentEvent);
 
   setEnglish(
     ".topbar-note",
@@ -1162,63 +1200,37 @@ function applyPageLanguage() {
   setEnglish(".topbar-actions .logout-button", "Log out");
   setEnglish(".hero-copy .eyebrow", "YOUR PLAN, YOUR STYLE", false, "तुम्हारी अलमारी, तुम्हारा स्टाइल");
   setEnglish(".hero h1", "Your wardrobe,<br><span>your next look.</span>", true);
-  setEnglish(".hero-description", "Import your next calendar event and get a complete look from your wardrobe.");
+  setEnglish(".hero-description", "Enter your party date and location. Get a weather-aware look using items and photos saved in your wardrobe.");
   setEnglish(".hero-tag", "LOOK GOOD.<br>FEEL GREAT.", true, "अच्छे दिखो।<br>खुश महसूस करो।");
 
-  setEnglish("#calendarTitle", "Get ready for your next event");
-  setEnglish(".calendar-intro", "Import an .ics file from your calendar. LOOKBOOK selects the next upcoming event and automatically creates a complete outfit from your wardrobe.");
-  setEnglish('label[for="calendarFile"]', "Calendar file (.ics)");
-  setEnglish("#calendarForm .primary-button span:first-child", "Import calendar and plan my look");
-  setEnglish(".calendar-privacy-note", "Only the event name, time, and venue are saved to your account; the original calendar file is not stored. A map route is created only when you request it; your current location and venue are sent to OpenStreetMap geocoding/routing services.");
-  setEnglish(".calendar-event .eyebrow", "NEXT UP");
+  setEnglish("#plannerTitle", "Tell us about the party");
+  setEnglish(".event-summary .eyebrow", "YOUR EVENT");
   setEnglish("#routeButton span", "Show route from my location");
-  setEnglish(".manual-planner-summary strong", "Choose party details manually");
-  setEnglish(".manual-planner-content .eyebrow", "MANUAL PLANNER", false, "MANUAL PLANNER");
-  setEnglish(".form-panel .section-heading h2", "Tell us about the party");
-  setEnglish(".form-panel h2", "Tell us about the party");
   setEnglish('label[for="partyType"]', "What kind of party?");
+  setEnglish('label[for="eventDate"]', "Party date");
+  setEnglish("#eventDateNote", "Weather forecasts are available for the next 16 days.");
   setEnglish('label[for="audience"]', "Who is the look for?");
-  setEnglish("#outfitTypeLabel", "Traditional outfit");
-  setEnglish('label[for="style"]', "Choose a style");
-  setEnglish('label[for="weather"]', "What's the weather?");
-  setEnglish('label[for="bottomPreference"]', "Choose pants or shorts");
-  setEnglish('label[for="location"]', "Location / city (optional)");
-  setEnglish("#location", "e.g. Jaipur");
+  setEnglish('label[for="location"]', "Party venue / city");
+  setEnglish("#location", "e.g. Jaipur or venue name");
   setEnglish(
     "#locationPrivacyNote",
-    "This city is only saved with your manual look."
+    "The venue is sent to OpenStreetMap and Open-Meteo for weather. A route is created only with your permission."
   );
-  setEnglish('label[for="photoInput"]', "Your photo (optional)", false, "अपनी फोटो (वैकल्पिक)");
   setOption('#partyType option[value="birthday"]', "🎂 Birthday party");
   setOption('#partyType option[value="wedding"]', "💐 Wedding party");
-  setOption('#partyType option[value="casual"]', "🎈 Casual party");
+  setOption('#partyType option[value="casual"]', "🎈 Party / celebration");
   setOption('#partyType option[value="night"]', "🌙 Night party");
   setOption('#audience option[value="men"]', "Men");
   setOption('#audience option[value="women"]', "Women");
   setOption('#audience option[value="children"]', "Children");
   setOption('#audience option[value="senior"]', "Older adult");
-  setOption('#outfitType option[value="any"]', "Any style");
-  setOption('#outfitType option[value="saree"]', "Saree");
-  setOption('#outfitType option[value="salwar"]', "Salwar suit / Anarkali");
-  setOption('#outfitType option[value="lehenga"]', "Lehenga choli");
-  setOption('#outfitType option[value="kurti"]', "Kurti set");
-  setOption('#style option[value="casual"]', "Relaxed and casual");
-  setOption('#style option[value="smart"]', "Smart and classic");
-  setOption('#style option[value="bold"]', "Bold and trendy");
-  setOption('#weather option[value="warm"]', "☀️ Warm / clear");
-  setOption('#weather option[value="cold"]', "❄️ Cold");
-  setOption('#weather option[value="rainy"]', "🌧️ Rainy");
-  setOption('#bottomPreference option[value="trousers"]', "Long pants");
-  setOption('#bottomPreference option[value="shorts"]', "Shorts");
   setOption('#wardrobeSize option[value="any"]', "Any / free size");
   setEnglish('label[for="wardrobeSize"]', "Clothing size");
-  setEnglish(".form-panel .primary-button span:first-child", "Suggest my look");
-  setEnglish("#removePhoto", "Remove photo");
-  setEnglish("#analyzePhotoButton", "Suggest a look from photo", false, "फोटो देखकर लुक सुझाओ");
+  setEnglish(".form-panel .primary-button span:first-child", "Suggest a look from my wardrobe");
 
   setEnglish(".result-panel .eyebrow", "MADE FOR YOUR PLAN", false, "तुम्हारे प्लान के लिए");
   setEnglish(".result-panel h2", "Your look");
-  setEnglish("#resultPlaceholder p", "Choose your party details.<br>Your look will appear here.", true);
+  setEnglish("#resultPlaceholder p", "Enter your party details.<br>Your look will appear here.", true);
   setEnglish("#designIdea .eyebrow", "DESIGN INSPIRATION", false, "डिज़ाइन की झलक");
   setEnglish("#colorIdeasTitle", "Clothing and shoe color combinations");
   setEnglish("#saveButton span", "Save this look");
@@ -1265,39 +1277,18 @@ function applyPageLanguage() {
   setEnglish("#wardrobeForm .primary-button", "＋ Add to wardrobe");
   setEnglish("#emptyWardrobe", "Your wardrobe is empty. Add your clothes above.");
   setEnglish(".catalog-details > summary", "Browse LOOKBOOK's built-in clothing catalog");
-  setEnglish(".catalog-details > .calendar-privacy-note", "These are built-in sample item names and categories, not images searched from the web. Empty categories also use the app's built-in outfit catalog.");
+  setEnglish(".catalog-details > .catalog-privacy-note", "These are built-in sample item names and categories, not images searched from the web. Empty categories also use the app's built-in outfit catalog.");
   setEnglish("#addSampleWardrobe span", "Add the full sample wardrobe");
-
-  setEnglish(
-    ".photo-consent span",
-    "I consent to AI photo analysis. A parent or guardian must consent for a child's photo.",
-    false,
-    "मैं इस फोटो के एआई विश्लेषण की अनुमति देता/देती हूँ। बच्चे की फोटो के लिए अभिभावक की अनुमति आवश्यक है।"
-  );
-  setEnglish(
-    ".photo-privacy-note",
-    "Photos are sent to Groq's AI service for analysis. The app does not store them.",
-    false,
-    "फोटो विश्लेषण के लिए इसे Groq की एआई सेवा को भेजा जाएगा। ऐप फोटो सेव नहीं करता।"
-  );
 
   document.title = appLanguage === "en"
     ? "Party Outfit Planner · LOOKBOOK"
     : "पार्टी आउटफिट प्लानर · LOOKBOOK";
-  const photoPreview = document.getElementById("photoPreview");
-  if (photoPreview) {
-    photoPreview.alt = appLanguage === "en"
-      ? "Preview of your uploaded photo"
-      : "अपलोड की गई फोटो की झलक";
-  }
-
   setEnglish(".saved-section:not(.wardrobe-section) .eyebrow", "YOUR COLLECTION", false, "तुम्हारा कलेक्शन");
   setEnglish(".saved-section:not(.wardrobe-section) h2", "Saved looks");
   setEnglish("#emptyHistory", "No looks saved yet. Create and save your first look.");
   setEnglish(".footer span:last-child", "Your style, for every party.", false, "हर पार्टी के लिए, तुम्हारा अपना स्टाइल।");
 
   if (lastOutfit) showOutfit(lastOutfit);
-  updateOutfitTypeFields();
   renderColorCombinations();
   translateVisibleMessages();
 
@@ -1469,121 +1460,11 @@ if (languageSelect) {
   languageSelect.addEventListener("change", applyPageLanguage);
   applyPageLanguage();
 }
-const photoInput = document.getElementById("photoInput");
-const photoPreview = document.getElementById("photoPreview");
-const photoPreviewBox = document.getElementById("photoPreviewBox");
-const photoMessage = document.getElementById("photoMessage");
-const removePhotoButton = document.getElementById("removePhoto");
-
-let photoPreviewUrl = null;
-
-photoInput.addEventListener("change", () => {
-  photoMessage.textContent = "";
-  const file = photoInput.files[0];
-
-  if (!file) return;
-
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-    photoMessage.textContent = translateText("JPG, PNG या WebP फोटो चुनें।");
-    photoInput.value = "";
-    return;
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    photoMessage.textContent = translateText("फोटो 5 MB से छोटी होनी चाहिए।");
-    photoInput.value = "";
-    return;
-  }
-
-  if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
-
-  photoPreviewUrl = URL.createObjectURL(file);
-  photoPreview.src = photoPreviewUrl;
-  photoPreviewBox.hidden = false;
-});
-
-removePhotoButton.addEventListener("click", () => {
-  photoInput.value = "";
-  photoPreview.removeAttribute("src");
-  photoPreviewBox.hidden = true;
-  photoMessage.textContent = "";
-  if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
-  photoPreviewUrl = null;
-});
-const analyzePhotoButton = document.getElementById("analyzePhotoButton");
-const photoConsent = document.getElementById("photoConsent");
-const analysisMessage = document.getElementById("analysisMessage");
-
-analyzePhotoButton.addEventListener("click", async () => {
-  const file = photoInput.files[0];
-
-  if (!file) {
-    analysisMessage.textContent = translateText("पहले फोटो चुनो।");
-    return;
-  }
-
-  if (!photoConsent.checked) {
-    analysisMessage.textContent = translateText("पहले फोटो विश्लेषण की अनुमति दो।");
-    return;
-  }
-
-  currentSelection = {
-    party_type: document.getElementById("partyType").value,
-    style: document.getElementById("style").value,
-    weather: document.getElementById("weather").value,
-    audience: document.getElementById("audience").value,
-    outfit_type: document.getElementById("outfitType").value,
-    bottom_preference: document.getElementById("bottomPreference").value,
-    location: locationInput.value.trim()
-  };
-
-  const formData = new FormData();
-  formData.append("photo", file);
-  formData.append("photo_consent", "yes");
-  formData.append("language", document.getElementById("languageSelect")?.value || "hi");
-
-  Object.entries(currentSelection).forEach(([key, value]) => {
-    formData.append(key, value);
-  });
-
-  analyzePhotoButton.disabled = true;
-  analysisMessage.textContent = translateText("फोटो देखकर सुझाव बनाया जा रहा है…");
-
-  try {
-    const response = await fetch("/api/analyze-photo", {
-      method: "POST",
-      body: formData
-    });
-
-    const data = await readJsonResponse(response);
-
-    if (!response.ok) {
-      throw new Error(data.error || "फोटो से सुझाव नहीं बन पाया।");
-    }
-
-    showOutfit(data.outfit);
-    analysisMessage.textContent = translateText("तुम्हारा फोटो-आधारित लुक तैयार है।");
-  } catch (error) {
-    analysisMessage.textContent = translateText(error.message);
-  } finally {
-    analyzePhotoButton.disabled = false;
-  }
-});
-
-function showCalendarEvent(event) {
-  currentCalendarEvent = event;
-  document.getElementById("calendarEventName").textContent = event.summary;
-  const start = new Date(event.starts_at);
-  document.getElementById("calendarEventTime").textContent =
-    Number.isNaN(start.getTime())
-      ? event.starts_at
-      : start.toLocaleString(appLanguage === "en" ? "en" : "hi-IN", {
-        dateStyle: "full",
-        timeStyle: "short"
-      });
-  document.getElementById("calendarEventLocation").textContent =
-    event.location || translateText("इस calendar event में venue/location नहीं दिया गया है।");
-  calendarEventPanel.hidden = false;
+function showEventSummary(event) {
+  currentEvent = event;
+  currentEventLocation = event.location;
+  renderEventSummary(event);
+  eventSummary.hidden = false;
   routeButton.disabled = !event.location;
   routeMessage.textContent = "";
   routeSummary.hidden = true;
@@ -1594,58 +1475,49 @@ function showCalendarEvent(event) {
   }
 }
 
-async function createNextEventLook() {
-  const response = await fetch("/api/calendar/plan", { method: "POST" });
-  const data = await readJsonResponse(response);
-  if (!response.ok) throw new Error(data.error || "अगले event का look नहीं बन पाया।");
-  currentSelection = data.selection;
-  showCalendarEvent(data.event);
-  showOutfit(data.outfit);
+function renderEventSummary(event) {
+  document.getElementById("eventName").textContent =
+    translateText(partyNames[event.party_type] || event.party_type);
+  const start = new Date(`${event.event_date}T12:00:00`);
+  document.getElementById("eventTime").textContent =
+    Number.isNaN(start.getTime())
+      ? event.event_date
+      : start.toLocaleString(appLanguage === "en" ? "en" : "hi-IN", {
+        dateStyle: "full"
+      });
+  document.getElementById("eventLocation").textContent =
+    event.location;
+  const weather = event.weather;
+  document.getElementById("eventWeather").textContent = weather
+    ? formatWeather(weather)
+    : "";
 }
 
-calendarForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  calendarMessage.textContent = "";
-  const submitButton = calendarForm.querySelector('button[type="submit"]');
-  const submitLabel = submitButton.querySelector("span");
-  submitButton.disabled = true;
-  submitLabel.textContent = appLanguage === "en" ? "Importing calendar…" : "Calendar import हो रहा है…";
+const partyNames = {
+  wedding: "शादी की पार्टी",
+  birthday: "बर्थडे पार्टी",
+  casual: "कैज़ुअल पार्टी",
+  night: "नाइट पार्टी"
+};
 
-  const formData = new FormData(calendarForm);
-  formData.set(
-    "timezone",
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+function formatWeather(weather) {
+  const conditions = {
+    warm: ["गर्म / साफ़", "Warm / clear"],
+    cold: ["ठंडा", "Cold"],
+    rainy: ["बारिश की संभावना", "Chance of rain"]
+  };
+  const condition = conditions[weather.condition]?.[appLanguage === "en" ? 1 : 0]
+    || weather.condition;
+  const numberFormat = new Intl.NumberFormat(
+    appLanguage === "en" ? "en" : "hi-IN",
+    { maximumFractionDigits: 0 }
   );
-  try {
-    const response = await fetch("/api/calendar/import", {
-      method: "POST",
-      body: formData
-    });
-    const data = await readJsonResponse(response);
-    if (!response.ok) throw new Error(data.error || "Calendar import नहीं हुआ।");
-    calendarMessage.textContent = appLanguage === "en"
-      ? `${data.event_count} calendar event${data.event_count === 1 ? "" : "s"} imported.`
-      : translateText(data.message);
-    if (data.event) await createNextEventLook();
-  } catch (error) {
-    calendarMessage.textContent = translateText(error.message);
-  } finally {
-    submitButton.disabled = false;
-    submitLabel.textContent = translateText("Calendar import करके look बनाओ");
-  }
-});
-
-async function loadCalendarEvent() {
-  try {
-    const response = await fetch("/api/calendar/next");
-    const data = await readJsonResponse(response);
-    if (response.ok && data.event) {
-      showCalendarEvent(data.event);
-      await createNextEventLook();
-    }
-  } catch (error) {
-    calendarMessage.textContent = translateText(error.message);
-  }
+  const min = numberFormat.format(weather.temperature_min);
+  const max = numberFormat.format(weather.temperature_max);
+  const rain = numberFormat.format(weather.precipitation_probability);
+  return appLanguage === "en"
+    ? `${condition} · ${min}–${max}°C · ${rain}% rain chance`
+    : `${condition} · ${min}–${max}°C · बारिश की संभावना ${rain}%`;
 }
 
 function showRouteOnMap(route, origin) {
@@ -1673,7 +1545,7 @@ function showRouteOnMap(route, origin) {
     .bindPopup(appLanguage === "en" ? "Your location" : "आपकी जगह");
   L.marker(destination)
     .addTo(routeMapInstance)
-    .bindPopup(currentCalendarEvent.location);
+    .bindPopup(currentEventLocation);
   const bounds = routeLayer.getBounds().extend(destination).extend([
     origin.latitude,
     origin.longitude
@@ -1694,11 +1566,11 @@ async function requestEventRoute(position) {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude
   };
-  const response = await fetch("/api/calendar/route", {
+  const response = await fetch("/api/route", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      event_id: currentCalendarEvent.id,
+      location: currentEventLocation,
       ...origin
     })
   });
@@ -1725,7 +1597,7 @@ routeButton.addEventListener("click", () => {
       } catch (error) {
         routeMessage.textContent = translateText(error.message);
       } finally {
-        routeButton.disabled = !currentCalendarEvent?.location;
+        routeButton.disabled = !currentEventLocation;
         routeButton.querySelector("span").textContent = translateText(
           "मेरी जगह से रास्ता दिखाओ"
         );
@@ -1739,7 +1611,7 @@ routeButton.addEventListener("click", () => {
         : (appLanguage === "en"
           ? "Could not read your current location. Retry when location is available."
           : "आपकी current location नहीं मिल पाई। उपलब्ध होने पर फिर कोशिश करें।");
-      routeButton.disabled = !currentCalendarEvent?.location;
+      routeButton.disabled = !currentEventLocation;
       routeButton.querySelector("span").textContent = translateText(
         "मेरी जगह से रास्ता दिखाओ"
       );
@@ -1796,4 +1668,3 @@ document.getElementById("addSampleWardrobe").addEventListener("click", async (ev
 });
 
 loadBuiltinCatalog();
-loadCalendarEvent();

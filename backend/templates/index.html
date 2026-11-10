@@ -37,7 +37,7 @@
           <p class="eyebrow">YOUR PLAN, YOUR STYLE</p>
           <h1>आपकी अलमारी,<br><span>आपका अगला लुक।</span></h1>
           <p class="hero-description">
-            Calendar का अगला कार्यक्रम चुनकर अपने कपड़ों, जूतों और चश्मे से पूरा लुक पाएँ।
+            पार्टी की तारीख और जगह डालें। अलमारी में दर्ज कपड़ों और उनकी photos से पूरा लुक पाएँ।
           </p>
         </div>
         <div class="hero-art" aria-hidden="true">
@@ -50,141 +50,65 @@
         </div>
       </section>
 
-      <section class="calendar-planner panel" aria-labelledby="calendarTitle">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">YOUR NEXT EVENT</p>
-            <h2 id="calendarTitle">अगले कार्यक्रम के लिए तैयार हों</h2>
-          </div>
-          <span class="step-badge">01</span>
-        </div>
-        <p class="calendar-intro">
-          अपनी calendar से .ics फ़ाइल import करें। LOOKBOOK अगला आने वाला event चुनेगा
-          और आपकी अलमारी से पूरा outfit अपने-आप बनाएगा।
-        </p>
-        <form id="calendarForm" class="calendar-form">
-          <label for="calendarFile">Calendar फ़ाइल (.ics)</label>
-          <input id="calendarFile" name="calendar" type="file" accept=".ics,text/calendar" required>
-          <button class="primary-button" type="submit">
-            <span>Calendar import करके look बनाओ</span><span aria-hidden="true">↗</span>
-          </button>
-        </form>
-        <p class="calendar-privacy-note">
-          सिर्फ़ event का नाम, समय और venue आपके account में सेव होंगे; original calendar
-          फ़ाइल सेव नहीं होगी। Map route सिर्फ़ आपके कहने पर बनता है; आपकी current location
-          और venue OpenStreetMap geocoding/routing services को भेजे जाते हैं।
-        </p>
-        <p id="calendarMessage" class="save-message" aria-live="polite"></p>
-        <div id="calendarEvent" class="calendar-event" hidden>
-          <div>
-            <p class="eyebrow">NEXT UP</p>
-            <h3 id="calendarEventName"></h3>
-            <p id="calendarEventTime" class="calendar-event-time"></p>
-            <p id="calendarEventLocation" class="calendar-event-location"></p>
-          </div>
-          <button id="routeButton" class="secondary-button" type="button" disabled>
-            ⌖ <span>मेरी जगह से रास्ता दिखाओ</span>
-          </button>
-        </div>
-        <p id="routeMessage" class="save-message" aria-live="polite"></p>
-        <p id="routeSummary" class="route-summary" hidden></p>
-        <div id="routeMap" class="route-map" role="region" aria-label="कार्यक्रम तक का नक्शा" hidden></div>
-      </section>
-
       <section class="planner-grid">
-        <details class="panel form-panel manual-planner">
-          <summary class="manual-planner-summary">
-            <span>
-              <span class="eyebrow">OPTIONAL</span>
-              <strong>खुद से party details चुनें</strong>
-            </span>
-            <span class="step-badge" aria-hidden="true">+</span>
-          </summary>
-          <div class="manual-planner-content">
+        <section class="panel form-panel" aria-labelledby="plannerTitle">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">MANUAL PLANNER</p>
-              <h2>अपनी पार्टी बताओ</h2>
+              <p class="eyebrow">YOUR NEXT EVENT</p>
+              <h2 id="plannerTitle">अपनी पार्टी बताओ</h2>
             </div>
-            <span class="step-badge">02</span>
+            <span class="step-badge">01</span>
           </div>
-
           <form id="outfitForm">
-            <label for="location">लोकेशन / शहर (वैकल्पिक)</label>
-            <input id="location" name="location" type="text" maxlength="100"
-                   autocomplete="address-level2" placeholder="जैसे: जयपुर">
-            <p id="locationPrivacyNote" class="location-privacy-note">
-              यह शहर सिर्फ़ आपके मैन्युअल लुक के साथ सेव होगा।
-            </p>
-
             <label for="partyType">किस तरह की पार्टी है?</label>
             <select id="partyType" name="party_type" required>
-              <option value="birthday">🎂 बर्थडे पार्टी</option>
               <option value="wedding">💐 शादी की पार्टी</option>
-              <option value="casual">🎈 कैज़ुअल पार्टी</option>
+              <option value="birthday">🎂 बर्थडे पार्टी</option>
+              <option value="casual">🎈 पार्टी / समारोह</option>
               <option value="night">🌙 नाइट पार्टी</option>
             </select>
-         <label for="audience">लुक किसके लिए है?</label>
-         <select id="audience" name="audience" required>
-         <option value="men">पुरुष</option>
-         <option value="women">महिला</option>
-         <option value="children">बच्चे</option>
-         <option value="senior">बुज़ुर्ग</option>
-        </select>
-        <label id="outfitTypeLabel" for="outfitType" hidden>पारंपरिक पोशाक</label>
-        <select id="outfitType" name="outfit_type" hidden>
-          <option value="any">कोई भी स्टाइल</option>
-          <option value="saree">साड़ी</option>
-          <option value="salwar">सलवार सूट / अनारकली</option>
-          <option value="lehenga">लहंगा चोली</option>
-          <option value="kurti">कुर्ती सेट</option>
-        </select>
-        <label for="bottomPreference">नीचे क्या पहनना है?</label>
-<select id="bottomPreference" name="bottom_preference">
-  <option value="trousers">लंबी पैंट</option>
-  <option value="shorts">शॉर्ट्स</option>
-</select>
 
-                    <label for="style">तुम्हारा स्टाइल</label>
-            <select id="style" name="style" required>
-              <option value="casual">आरामदायक और कैज़ुअल</option>
-              <option value="smart">स्मार्ट और क्लासिक</option>
-              <option value="bold">बोल्ड और ट्रेंडी</option>
+            <label for="eventDate">पार्टी की तारीख</label>
+            <input id="eventDate" name="event_date" type="date" required>
+            <p id="eventDateNote" class="location-privacy-note">
+              मौसम का अनुमान अगले 16 दिनों तक उपलब्ध है।
+            </p>
+
+            <label for="location">पार्टी की जगह / शहर</label>
+            <input id="location" name="location" type="text" maxlength="100"
+                   autocomplete="address-level2" placeholder="जैसे: जयपुर या venue का नाम" required>
+            <p id="locationPrivacyNote" class="location-privacy-note">
+              मौसम के लिए जगह OpenStreetMap और Open-Meteo को भेजी जाएगी। रास्ता सिर्फ़ आपकी अनुमति से बनेगा।
+            </p>
+
+            <label for="audience">लुक किसके लिए है?</label>
+            <select id="audience" name="audience" required>
+              <option value="men">पुरुष</option>
+              <option value="women">महिला</option>
+              <option value="children">बच्चे</option>
+              <option value="senior">बुज़ुर्ग</option>
             </select>
-
-            <label for="weather">मौसम कैसा रहेगा?</label>
-            <select id="weather" name="weather" required>
-              <option value="warm">☀️ गर्म / साफ़</option>
-              <option value="cold">❄️ ठंडा</option>
-              <option value="rainy">🌧️ बारिश</option>
-            </select>
-<label for="photoInput">अपनी फोटो (वैकल्पिक)</label>
-<input id="photoInput" type="file" accept="image/png,image/jpeg,image/webp">
-
-<div id="photoPreviewBox" class="photo-preview-box" hidden>
-  <img id="photoPreview" alt="अपलोड की गई फोटो की झलक">
-  <button id="removePhoto" type="button">फोटो हटाएँ</button>
-</div>
-
-<p id="photoMessage" class="save-message" aria-live="polite"></p>
-<label class="photo-consent">
-  <input id="photoConsent" type="checkbox">
-  <span>मैं इस फोटो के एआई विश्लेषण की अनुमति देता/देती हूँ। बच्चे की फोटो के लिए अभिभावक की अनुमति आवश्यक है।</span>
-</label>
-<p class="photo-privacy-note">फोटो विश्लेषण के लिए इसे Groq की एआई सेवा को भेजा जाएगा। ऐप फोटो सेव नहीं करता।</p>
-
-<button id="analyzePhotoButton" class="secondary-button photo-analysis-button" type="button">
-  फोटो देखकर लुक सुझाओ
-</button>
-
-<p id="analysisMessage" class="save-message" aria-live="polite"></p>
             <button class="primary-button" type="submit">
-              <span>मेरा लुक सुझाओ</span><span aria-hidden="true">↗</span>
+              <span>मेरी अलमारी से लुक सुझाओ</span><span aria-hidden="true">↗</span>
             </button>
             <p id="errorMessage" class="error-message" role="alert"></p>
           </form>
+          <div id="eventSummary" class="event-summary" hidden>
+            <div>
+              <p class="eyebrow">YOUR EVENT</p>
+              <h3 id="eventName"></h3>
+              <p id="eventTime" class="event-time"></p>
+              <p id="eventLocation" class="event-time"></p>
+              <p id="eventWeather" class="event-time"></p>
+            </div>
+            <button id="routeButton" class="secondary-button" type="button">
+              ⌖ <span>मेरी जगह से रास्ता दिखाओ</span>
+            </button>
           </div>
-        </details>
+          <p id="routeMessage" class="save-message" aria-live="polite"></p>
+          <p id="routeSummary" class="route-summary" hidden></p>
+          <div id="routeMap" class="route-map" role="region" aria-label="कार्यक्रम तक का नक्शा" hidden></div>
+        </section>
 
         <div class="panel result-panel" id="resultPanel">
           <div class="section-heading">
@@ -206,11 +130,11 @@
               <span id="styleName"></span>
             </div>
             <div class="outfit-items">
-              <div class="outfit-item"><span>👕</span><div><small>ऊपर</small><strong id="outfitTop"></strong></div></div>
-              <div class="outfit-item"><span>👖</span><div><small>नीचे</small><strong id="outfitBottom"></strong></div></div>
-              <div class="outfit-item"><span>👟</span><div><small>जूते</small><strong id="outfitShoes"></strong></div></div>
-              <div class="outfit-item"><span>⌚</span><div><small>एक्सेसरी</small><strong id="outfitAccessory"></strong></div></div>
-              <div class="outfit-item"><span>👓</span><div><small>चश्मा</small><strong id="outfitEyewear"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">👕<img id="outfitTopImage" alt="" hidden></span><div><small>ऊपर</small><strong id="outfitTop"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">👖<img id="outfitBottomImage" alt="" hidden></span><div><small>नीचे</small><strong id="outfitBottom"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">👟<img id="outfitShoesImage" alt="" hidden></span><div><small>जूते</small><strong id="outfitShoes"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">⌚<img id="outfitAccessoryImage" alt="" hidden></span><div><small>एक्सेसरी</small><strong id="outfitAccessory"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">👓<img id="outfitEyewearImage" alt="" hidden></span><div><small>चश्मा</small><strong id="outfitEyewear"></strong></div></div>
             </div>
             <p id="outfitLanguageStatus" class="outfit-language-status" aria-live="polite" hidden></p>
             <section id="designIdea" class="design-idea" aria-labelledby="designIdeaTitle" hidden>
@@ -321,7 +245,7 @@
         <p id="wardrobeMessage" class="save-message" aria-live="polite"></p>
         <details class="catalog-details">
           <summary>LOOKBOOK के अंदर का sample कपड़ों का catalog देखें</summary>
-          <p class="calendar-privacy-note">
+          <p class="catalog-privacy-note">
             ये app के अंदर के sample नाम और category हैं, web से खोजी गई तस्वीरें नहीं।
             खाली category में look बनाते समय app अपने built-in outfit catalog से भी सुझाव देता है।
           </p>
