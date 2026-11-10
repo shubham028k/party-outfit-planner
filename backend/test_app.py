@@ -187,8 +187,10 @@ class OutfitPlannerTests(unittest.TestCase):
                 "weather": "cold",
                 "style": "smart",
                 "audience": "women",
+                "location": "Jaipur",
             },
         )
+        self.assertEqual(response.status_code, 200)
         outfit = response.get_json()["outfit"]
         response = self.client.post(
             "/api/outfits",
@@ -197,6 +199,7 @@ class OutfitPlannerTests(unittest.TestCase):
                 "weather": "cold",
                 "style": "smart",
                 "audience": "women",
+                "location": "Jaipur",
                 "outfit": outfit,
             },
         )
@@ -206,6 +209,7 @@ class OutfitPlannerTests(unittest.TestCase):
         saved = self.client.get("/api/outfits").get_json()["outfits"]
         self.assertEqual(len(saved), 1)
         self.assertEqual(saved[0]["outfit"]["top"], outfit["top"])
+        self.assertEqual(saved[0]["outfit"]["location"], "Jaipur")
         self.assertEqual(self.client.delete(f"/api/outfits/{outfit_id}").status_code, 200)
         self.assertEqual(self.client.get("/api/outfits").get_json()["outfits"], [])
 

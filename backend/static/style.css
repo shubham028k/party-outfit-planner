@@ -240,7 +240,7 @@ label {
 
 select,
 .wardrobe-form input,
-.location-controls input {
+#location {
   width: 100%;
   height: 46px;
   padding: 0 13px;
@@ -253,22 +253,13 @@ select,
 
 select:focus,
 .wardrobe-form input:focus,
-.location-controls input:focus {
+#location:focus {
   border-color: var(--lavender);
   box-shadow: 0 0 0 3px rgba(183, 162, 255, 0.12);
 }
 
 .wardrobe-form input::placeholder {
   color: #77738e;
-}
-
-.location-controls {
-  display: grid;
-  gap: 9px;
-}
-
-.location-controls .secondary-button {
-  min-height: 42px;
 }
 
 .location-privacy-note {
@@ -580,11 +571,6 @@ select:focus,
   border: 1px solid rgba(255, 143, 179, 0.45);
   color: var(--pink);
   background: transparent;
-}
-
-.google-images-link {
-  margin: 12px 0 0;
-  text-decoration: none;
 }
 
 .saved-section {

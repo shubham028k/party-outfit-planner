@@ -10,9 +10,6 @@ const outfitTypeSelect = document.getElementById("outfitType");
 const bottomPreferenceLabel = document.querySelector('label[for="bottomPreference"]');
 const bottomPreferenceSelect = document.getElementById("bottomPreference");
 const locationInput = document.getElementById("location");
-const locationMessage = document.getElementById("locationMessage");
-const useCurrentLocationButton = document.getElementById("useCurrentLocation");
-const googleImagesLink = document.getElementById("googleImagesLink");
 
 async function readJsonResponse(response) {
   const contentType = (response.headers.get("content-type") || "").toLowerCase();
@@ -63,74 +60,10 @@ outfitTypeSelect.addEventListener("change", updateOutfitTypeFields);
 updateOutfitTypeFields();
 
 locationInput.addEventListener("input", () => {
-  locationMessage.textContent = "";
   if (currentSelection) currentSelection.location = locationInput.value.trim();
-  if (currentOutfit) updateGoogleImagesLink(currentOutfit);
 });
 
-useCurrentLocationButton.addEventListener("click", async () => {
-  if (!navigator.geolocation) {
-    locationMessage.textContent = translateText(
-      "यह ब्राउज़र लोकेशन की सुविधा नहीं देता।"
-    );
-    return;
-  }
-
-  useCurrentLocationButton.disabled = true;
-  locationMessage.textContent = translateText("लोकेशन खोजी जा रही है…");
-
-  try {
-    const position = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
-        maximumAge: 300000,
-        timeout: 10000
-      });
-    });
-    const parameters = new URLSearchParams({
-      format: "jsonv2",
-      lat: String(position.coords.latitude),
-      lon: String(position.coords.longitude),
-      zoom: "10",
-      addressdetails: "1"
-    });
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?${parameters.toString()}`,
-      { headers: { Accept: "application/json" } }
-    );
-    if (!response.ok) {
-      throw new Error("शहर नहीं मिल पाया। शहर का नाम खुद लिखें।");
-    }
-
-    const result = await response.json();
-    const address = result.address || {};
-    const city = address.city
-      || address.town
-      || address.village
-      || address.municipality
-      || address.county
-      || address.state;
-    if (!city) throw new Error("शहर नहीं मिल पाया। शहर का नाम खुद लिखें।");
-
-    locationInput.value = city;
-    locationInput.dispatchEvent(new Event("input", { bubbles: true }));
-    locationMessage.textContent = translateText(`लोकेशन सेट: ${city}`);
-  } catch (error) {
-    if (error && error.code === 1) {
-      locationMessage.textContent = translateText(
-        "लोकेशन की अनुमति नहीं मिली। शहर का नाम खुद लिखें।"
-      );
-    } else {
-      locationMessage.textContent = translateText(
-        error.message || "लोकेशन नहीं मिल पाई। शहर का नाम खुद लिखें।"
-      );
-    }
-  } finally {
-    useCurrentLocationButton.disabled = false;
-  }
-});
-
-function updateGoogleImagesLink(outfit) {
+function googleImagesSearchUrl(outfit) {
   const searchTerms = [
     outfit.top,
     outfit.bottom,
@@ -143,7 +76,7 @@ function updateGoogleImagesLink(outfit) {
   const searchUrl = new URL("https://www.google.com/search");
   searchUrl.searchParams.set("tbm", "isch");
   searchUrl.searchParams.set("q", searchTerms.join(" ").slice(0, 500));
-  googleImagesLink.href = searchUrl.toString();
+  return searchUrl.toString();
 }
 
 const categoryNames = {
@@ -410,7 +343,7 @@ updateWardrobeSizeField();
 
 function translateVisibleMessages() {
   document.querySelectorAll(
-    "#errorMessage, #saveMessage, #wardrobeMessage, #photoMessage, #analysisMessage, #locationMessage"
+    "#errorMessage, #saveMessage, #wardrobeMessage, #photoMessage, #analysisMessage"
   ).forEach((element) => {
     element.textContent = translateText(element.textContent);
   });
@@ -420,6 +353,10 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorMessage.textContent = "";
   saveMessage.textContent = "";
+  const googleImagesTab = window.open("about:blank", "_blank");
+  if (googleImagesTab) {
+    googleImagesTab.opener = null;
+  }
 
   currentSelection = {
     party_type: document.getElementById("partyType").value,
@@ -449,7 +386,15 @@ form.addEventListener("submit", async (event) => {
     }
 
     showOutfit(data.outfit);
+    if (googleImagesTab && !googleImagesTab.closed) {
+      googleImagesTab.location.href = googleImagesSearchUrl(data.outfit);
+    } else if (!googleImagesTab) {
+      errorMessage.textContent = translateText(
+        "Google Images खोलने के लिए पॉप-अप की अनुमति दें। आपका लुक नीचे दिख रहा है और सेव किया जा सकता है।"
+      );
+    }
   } catch (error) {
+    if (googleImagesTab && !googleImagesTab.closed) googleImagesTab.close();
     errorMessage.textContent = translateText(error.message);
   } finally {
     button.disabled = false;
@@ -1082,12 +1027,7 @@ const englishText = {
   "फोटो देखकर सुझाव बनाया जा रहा है…": "Creating a suggestion from your photo…",
   "फोटो से सुझाव नहीं बन पाया।": "Could not create a suggestion from the photo.",
   "तुम्हारा फोटो-आधारित लुक तैयार है।": "Your photo-based look is ready.",
-  "यह ब्राउज़र लोकेशन की सुविधा नहीं देता।": "This browser does not support location.",
-  "लोकेशन खोजी जा रही है…": "Finding your location…",
-  "शहर नहीं मिल पाया। शहर का नाम खुद लिखें।": "Could not find your city. Enter it manually.",
-  "लोकेशन की अनुमति नहीं मिली। शहर का नाम खुद लिखें।": "Location permission was denied. Enter your city manually.",
-  "लोकेशन नहीं मिल पाई। शहर का नाम खुद लिखें।": "Could not get your location. Enter your city manually.",
-  "लोकेशन सेट:": "Location set:"
+  "Google Images खोलने के लिए पॉप-अप की अनुमति दें। आपका लुक नीचे दिख रहा है और सेव किया जा सकता है।": "Allow pop-ups to open Google Images. Your look is shown below and can be saved."
 };
 
 function translateText(text) {
@@ -1169,14 +1109,10 @@ function applyPageLanguage() {
   setEnglish('label[for="bottomPreference"]', "Choose pants or shorts");
   setEnglish('label[for="location"]', "Location / city (optional)");
   setEnglish("#location", "e.g. Jaipur");
-  setEnglish("#useCurrentLocation", "Use my current location");
   setEnglish(
     "#locationPrivacyNote",
-    'When you use current location, coordinates are sent to OpenStreetMap to find your city. The city is sent to Groq for photo suggestions and to Google Images searches, and is saved with a look if you save it. Choose weather separately. <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>',
-    true
+    "The city is saved with your look. For photo suggestions it is sent to Groq, and it is included in the Google Images search."
   );
-  setEnglish("#imageSearchNote", "View original images and their sources on Google Images; check image rights before using them.");
-  setEnglish("#googleImagesLink", "Find this look on Google Images ↗");
   setEnglish('label[for="photoInput"]', "Your photo (optional)", false, "अपनी फोटो (वैकल्पिक)");
   setOption('#partyType option[value="birthday"]', "🎂 Birthday party");
   setOption('#partyType option[value="wedding"]', "💐 Wedding party");
@@ -1396,7 +1332,6 @@ function renderLocalizedOutfit(outfit) {
   document.getElementById("outfitAccessory").textContent = outfit.accessory;
   document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
-  updateGoogleImagesLink(outfit);
   renderColorCombinations();
 }
 

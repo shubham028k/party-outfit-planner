@@ -60,6 +60,13 @@
           </div>
 
           <form id="outfitForm">
+            <label for="location">लोकेशन / शहर (वैकल्पिक)</label>
+            <input id="location" name="location" type="text" maxlength="100"
+                   autocomplete="address-level2" placeholder="जैसे: जयपुर">
+            <p id="locationPrivacyNote" class="location-privacy-note">
+              शहर आपके लुक के साथ सेव होगा। फोटो सुझाव में यह Groq को और Google Images खोज में Google को भेजा जाएगा।
+            </p>
+
             <label for="partyType">किस तरह की पार्टी है?</label>
             <select id="partyType" name="party_type" required>
               <option value="birthday">🎂 बर्थडे पार्टी</option>
@@ -87,22 +94,6 @@
   <option value="trousers">लंबी पैंट</option>
   <option value="shorts">शॉर्ट्स</option>
 </select>
-
-        <label for="location">लोकेशन / शहर (वैकल्पिक)</label>
-        <div class="location-controls">
-          <input id="location" name="location" type="text" maxlength="100"
-                 autocomplete="address-level2" placeholder="जैसे: जयपुर">
-          <button id="useCurrentLocation" class="secondary-button" type="button">
-            मेरी लोकेशन इस्तेमाल करो
-          </button>
-        </div>
-        <p id="locationMessage" class="save-message" aria-live="polite"></p>
-        <p id="locationPrivacyNote" class="location-privacy-note">
-          वर्तमान लोकेशन चुनने पर निर्देशांक OpenStreetMap को शहर खोजने के लिए भेजे जाएंगे।
-          शहर फोटो सुझाव के लिए Groq और Google Images खोज को भेजा जाएगा, और सेव किए लुक के साथ रहेगा।
-          मौसम ऊपर से चुनें।
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>
-        </p>
 
                     <label for="style">तुम्हारा स्टाइल</label>
             <select id="style" name="style" required>
@@ -180,13 +171,6 @@
               </div>
             </section>
             <div class="weather-tip"><span>✦</span><p id="weatherTip"></p></div>
-            <a id="googleImagesLink" class="secondary-button google-images-link"
-               href="https://www.google.com/imghp" target="_blank" rel="noopener noreferrer">
-              Google Images में ऐसा लुक खोजें ↗
-            </a>
-            <p id="imageSearchNote" class="location-privacy-note">
-              Google Images पर मूल तस्वीरें और उनके स्रोत देखें; इस्तेमाल से पहले तस्वीर के अधिकार जाँचें।
-            </p>
             <section class="color-ideas" aria-labelledby="colorIdeasTitle">
               <h3 id="colorIdeasTitle">कपड़ों और जूतों के रंगों के मेल</h3>
               <div id="colorCombinationList" class="color-combination-list"></div>
