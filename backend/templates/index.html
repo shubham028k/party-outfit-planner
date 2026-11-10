@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#17152b">
   <title>पार्टी आउटफिट प्लानर · LOOKBOOK</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -34,9 +35,9 @@
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">YOUR PLAN, YOUR STYLE</p>
-          <h1>पार्टी के लिए<br><span>परफेक्ट लुक।</span></h1>
+          <h1>आपकी अलमारी,<br><span>आपका अगला लुक।</span></h1>
           <p class="hero-description">
-            पार्टी, मौसम और अपने मूड के हिसाब से अपना अगला आउटफ़िट प्लान करो।
+            Calendar का अगला कार्यक्रम चुनकर अपने कपड़ों, जूतों और चश्मे से पूरा लुक पाएँ।
           </p>
         </div>
         <div class="hero-art" aria-hidden="true">
@@ -49,14 +50,63 @@
         </div>
       </section>
 
+      <section class="calendar-planner panel" aria-labelledby="calendarTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">YOUR NEXT EVENT</p>
+            <h2 id="calendarTitle">अगले कार्यक्रम के लिए तैयार हों</h2>
+          </div>
+          <span class="step-badge">01</span>
+        </div>
+        <p class="calendar-intro">
+          अपनी calendar से .ics फ़ाइल import करें। LOOKBOOK अगला आने वाला event चुनेगा
+          और आपकी अलमारी से पूरा outfit अपने-आप बनाएगा।
+        </p>
+        <form id="calendarForm" class="calendar-form">
+          <label for="calendarFile">Calendar फ़ाइल (.ics)</label>
+          <input id="calendarFile" name="calendar" type="file" accept=".ics,text/calendar" required>
+          <button class="primary-button" type="submit">
+            <span>Calendar import करके look बनाओ</span><span aria-hidden="true">↗</span>
+          </button>
+        </form>
+        <p class="calendar-privacy-note">
+          सिर्फ़ event का नाम, समय और venue आपके account में सेव होंगे; original calendar
+          फ़ाइल सेव नहीं होगी। Map route सिर्फ़ आपके कहने पर बनता है; आपकी current location
+          और venue OpenStreetMap geocoding/routing services को भेजे जाते हैं।
+        </p>
+        <p id="calendarMessage" class="save-message" aria-live="polite"></p>
+        <div id="calendarEvent" class="calendar-event" hidden>
+          <div>
+            <p class="eyebrow">NEXT UP</p>
+            <h3 id="calendarEventName"></h3>
+            <p id="calendarEventTime" class="calendar-event-time"></p>
+            <p id="calendarEventLocation" class="calendar-event-location"></p>
+          </div>
+          <button id="routeButton" class="secondary-button" type="button" disabled>
+            ⌖ <span>मेरी जगह से रास्ता दिखाओ</span>
+          </button>
+        </div>
+        <p id="routeMessage" class="save-message" aria-live="polite"></p>
+        <p id="routeSummary" class="route-summary" hidden></p>
+        <div id="routeMap" class="route-map" role="region" aria-label="कार्यक्रम तक का नक्शा" hidden></div>
+      </section>
+
       <section class="planner-grid">
-        <div class="panel form-panel">
+        <details class="panel form-panel manual-planner">
+          <summary class="manual-planner-summary">
+            <span>
+              <span class="eyebrow">OPTIONAL</span>
+              <strong>खुद से party details चुनें</strong>
+            </span>
+            <span class="step-badge" aria-hidden="true">+</span>
+          </summary>
+          <div class="manual-planner-content">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">LET'S GET READY</p>
+              <p class="eyebrow">MANUAL PLANNER</p>
               <h2>अपनी पार्टी बताओ</h2>
             </div>
-            <span class="step-badge">01</span>
+            <span class="step-badge">02</span>
           </div>
 
           <form id="outfitForm">
@@ -64,7 +114,7 @@
             <input id="location" name="location" type="text" maxlength="100"
                    autocomplete="address-level2" placeholder="जैसे: जयपुर">
             <p id="locationPrivacyNote" class="location-privacy-note">
-              शहर आपके लुक के साथ सेव होगा। फोटो सुझाव में यह Groq को और Google Images खोज में Google को भेजा जाएगा।
+              यह शहर सिर्फ़ आपके मैन्युअल लुक के साथ सेव होगा।
             </p>
 
             <label for="partyType">किस तरह की पार्टी है?</label>
@@ -133,7 +183,8 @@
             </button>
             <p id="errorMessage" class="error-message" role="alert"></p>
           </form>
-        </div>
+          </div>
+        </details>
 
         <div class="panel result-panel" id="resultPanel">
           <div class="section-heading">
@@ -254,6 +305,17 @@
         </form>
 
         <p id="wardrobeMessage" class="save-message" aria-live="polite"></p>
+        <details class="catalog-details">
+          <summary>LOOKBOOK के अंदर का sample कपड़ों का catalog देखें</summary>
+          <p class="calendar-privacy-note">
+            ये app के अंदर के sample नाम और category हैं, web से खोजी गई तस्वीरें नहीं।
+            खाली category में look बनाते समय app अपने built-in outfit catalog से भी सुझाव देता है।
+          </p>
+          <div id="builtinCatalog" class="builtin-catalog"></div>
+          <button id="addSampleWardrobe" class="secondary-button" type="button">
+            ＋ <span>पूरी sample अलमारी जोड़ें</span>
+          </button>
+        </details>
         <div id="wardrobeList" class="history-list"></div>
         <p id="emptyWardrobe" class="empty-history">
           अभी अलमारी खाली है। ऊपर से अपने कपड़े जोड़ो।
@@ -281,6 +343,7 @@
     </footer>
   </div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

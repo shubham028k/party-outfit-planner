@@ -6,12 +6,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from contextlib import contextmanager
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, time, timedelta, timezone
 import sqlite3
 import json
 import re
 import os
 import secrets
+import uuid
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from dateutil.rrule import rrulestr
 from io import BytesIO
 import base64
 from urllib.error import HTTPError, URLError
@@ -818,6 +821,18 @@ def initialize_database():
             )
         """)
 
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS calendar_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                uid TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                starts_at TEXT NOT NULL,
+                location TEXT NOT NULL DEFAULT '',
+                UNIQUE(user_id, uid)
+            )
+        """)
+
         user_columns = {
             row["name"]
             for row in connection.execute("PRAGMA table_info(users)").fetchall()
@@ -876,6 +891,318 @@ def initialize_database():
                 )
 
 
+BUILTIN_CATALOG = [
+    {"name": "हल्की नीली ऑक्सफ़ोर्ड शर्ट", "category": "top", "color": "नीला"},
+    {"name": "सॉलिड रंग की टी-शर्ट", "category": "top", "color": "काला"},
+    {"name": "हल्के रंग का कुर्ता", "category": "top", "color": "क्रीम"},
+    {"name": "डार्क ब्लू चिनोज़", "category": "bottom", "color": "नेवी"},
+    {"name": "स्ट्रेट-फिट ब्लू जींस", "category": "bottom", "color": "नीला"},
+    {"name": "आरामदायक कॉटन शॉर्ट्स", "category": "shorts", "color": "खाकी"},
+    {"name": "सफ़ेद स्नीकर्स", "category": "shoes", "color": "सफ़ेद"},
+    {"name": "ब्राउन लोफ़र्स", "category": "shoes", "color": "भूरा"},
+    {"name": "ब्राउन जूती", "category": "shoes", "color": "भूरा"},
+    {"name": "क्लासिक घड़ी", "category": "accessory", "color": "सिल्वर"},
+    {"name": "लेदर बेल्ट", "category": "accessory", "color": "भूरा"},
+    {"name": "स्टेटमेंट इयररिंग्स", "category": "accessory", "color": "गोल्ड"},
+    {"name": "क्लासिक फ्रेम चश्मा", "category": "eyewear", "color": "काला"},
+    {"name": "धूप का चश्मा", "category": "eyewear", "color": "काला"},
+    {"name": "फ्लोरल कुर्ती", "category": "kurti", "color": "गुलाबी"},
+    {"name": "उत्सवी सलवार सूट", "category": "salwar", "color": "मरून"},
+    {"name": "एम्ब्रॉयडर्ड साड़ी", "category": "saree", "color": "जामुनी"},
+    {"name": "पार्टी लहंगा", "category": "lehenga", "color": "हरा"}
+]
+MAX_CALENDAR_EVENTS = 2000
+
+
+def unfold_icalendar(text):
+    unfolded = []
+    for line in text.splitlines():
+        if line.startswith((" ", "\t")) and unfolded:
+            unfolded[-1] += line[1:]
+        else:
+            unfolded.append(line)
+    return unfolded
+
+
+def parse_icalendar_datetime(value, parameters, default_timezone):
+    if value.endswith("Z"):
+        parsed = datetime.strptime(value[:-1], "%Y%m%dT%H%M%S").replace(
+            tzinfo=timezone.utc
+        )
+        return parsed
+
+    tzid = parameters.get("TZID")
+    try:
+        event_timezone = ZoneInfo(tzid) if tzid else default_timezone
+    except ZoneInfoNotFoundError:
+        app.logger.warning("Unknown timezone in imported calendar: %s", tzid)
+        event_timezone = default_timezone
+
+    if len(value) == 8:
+        return datetime.combine(
+            datetime.strptime(value, "%Y%m%d").date(),
+            time.min,
+            tzinfo=event_timezone
+        )
+    for value_format in ("%Y%m%dT%H%M%S", "%Y%m%dT%H%M"):
+        try:
+            return datetime.strptime(value, value_format).replace(
+                tzinfo=event_timezone
+            )
+        except ValueError:
+            continue
+    raise ValueError("कैलेंडर में किसी event की तारीख या समय पढ़ा नहीं जा सका।")
+
+
+def unescape_icalendar_text(value):
+    return (
+        value.replace("\\n", "\n")
+        .replace("\\N", "\n")
+        .replace("\\,", ",")
+        .replace("\\;", ";")
+        .replace("\\\\", "\\")
+    )
+
+
+def parse_icalendar_events(text, default_timezone):
+    events = []
+    current = None
+    for line in unfold_icalendar(text):
+        upper_line = line.upper()
+        if upper_line == "BEGIN:VEVENT":
+            current = {}
+            continue
+        if upper_line == "END:VEVENT":
+            if current is None:
+                continue
+            is_cancelled = current.get("STATUS", (None, ""))[1].upper() == "CANCELLED"
+            if current.get("DTSTART") and not is_cancelled:
+                starts_at = parse_icalendar_datetime(
+                    current["DTSTART"][1],
+                    current["DTSTART"][0],
+                    default_timezone
+                )
+                scheduled_starts = [starts_at]
+                rule = current.get("RRULE")
+                if rule:
+                    try:
+                        recurrence = rrulestr(rule[1], dtstart=starts_at)
+                    except (TypeError, ValueError) as error:
+                        raise ValueError(
+                            "Calendar में किसी repeating event का rule मान्य नहीं है।"
+                        ) from error
+                    local_now = datetime.now(starts_at.tzinfo)
+                    horizon = local_now + timedelta(days=3652)
+                    scheduled_starts = []
+                    remaining = MAX_CALENDAR_EVENTS - len(events)
+                    for occurrence in recurrence.xafter(
+                        local_now,
+                        count=min(10001, remaining + 1),
+                        inc=True
+                    ):
+                        if occurrence > horizon:
+                            break
+                        if len(scheduled_starts) >= remaining:
+                            raise ValueError(
+                                "Calendar में 2,000 से अधिक events हैं; छोटी फ़ाइल import करें।"
+                            )
+                        scheduled_starts.append(occurrence)
+
+                excluded_starts = set()
+                for parameters, values in current.get("EXDATE", []):
+                    excluded_starts.update(
+                        parse_icalendar_datetime(value, parameters, default_timezone)
+                        for value in values.split(",")
+                    )
+                for parameters, values in current.get("RDATE", []):
+                    scheduled_starts.extend(
+                        parse_icalendar_datetime(value, parameters, default_timezone)
+                        for value in values.split(",")
+                    )
+                scheduled_starts = sorted({
+                    occurrence for occurrence in scheduled_starts
+                    if occurrence not in excluded_starts
+                })
+                if len(events) + len(scheduled_starts) > MAX_CALENDAR_EVENTS:
+                    raise ValueError(
+                        "Calendar में 2,000 से अधिक events हैं; छोटी फ़ाइल import करें।"
+                    )
+
+                base_uid = current.get("UID", (None, str(uuid.uuid4())))[1][:200]
+                recurrence_id = current.get("RECURRENCE-ID")
+                summary = unescape_icalendar_text(
+                    current.get("SUMMARY", (None, "कार्यक्रम"))[1]
+                )[:200]
+                location = unescape_icalendar_text(
+                    current.get("LOCATION", (None, ""))[1]
+                )[:300]
+                for occurrence in scheduled_starts:
+                    uid = base_uid
+                    if rule or current.get("RDATE") or recurrence_id:
+                        uid = f"{uid}::{occurrence.isoformat(timespec='seconds')}"
+                    events.append({
+                        "uid": uid,
+                        "summary": summary,
+                        "starts_at": occurrence.astimezone(timezone.utc).isoformat(
+                            timespec="seconds"
+                        ),
+                        "location": location
+                    })
+            current = None
+            continue
+        if current is None:
+            continue
+        property_name, separator, value = line.partition(":")
+        if not separator:
+            continue
+        parts = property_name.split(";")
+        name = parts[0].upper()
+        if name not in {
+            "UID", "SUMMARY", "DTSTART", "LOCATION", "RECURRENCE-ID",
+            "RRULE", "RDATE", "EXDATE", "STATUS"
+        }:
+            continue
+        parameters = {}
+        for parameter in parts[1:]:
+            key, equals, parameter_value = parameter.partition("=")
+            if equals:
+                parameters[key.upper()] = parameter_value.strip('"')
+        if name in {"RDATE", "EXDATE"}:
+            current.setdefault(name, []).append((parameters, value))
+        else:
+            current[name] = (parameters, value)
+    return events
+
+
+def next_calendar_event(user_id):
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with connect_db() as connection:
+        row = connection.execute(
+            """SELECT id, summary, starts_at, location
+               FROM calendar_events
+               WHERE user_id = ? AND starts_at >= ?
+               ORDER BY starts_at, id
+               LIMIT 1""",
+            (user_id, now)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def auto_plan_for_event(user_id, event):
+    with connect_db() as connection:
+        audience_row = connection.execute(
+            """SELECT audience, COUNT(*) AS item_count
+               FROM wardrobe_items
+               WHERE user_id = ? AND audience != 'all'
+               GROUP BY audience
+               ORDER BY item_count DESC, audience
+               LIMIT 1""",
+            (user_id,)
+        ).fetchone()
+        ethnic_item = connection.execute(
+            """SELECT category FROM wardrobe_items
+               WHERE user_id = ?
+                 AND category IN ('saree', 'salwar', 'lehenga', 'kurti')
+               GROUP BY category
+               ORDER BY COUNT(*) DESC, category
+               LIMIT 1""",
+            (user_id,)
+        ).fetchone()
+
+    audience = audience_row["audience"] if audience_row else "adult"
+    if audience == "adult":
+        audience = "women" if ethnic_item else "men"
+
+    text = event["summary"].casefold()
+    if any(word in text for word in ("wedding", "marriage", "reception", "शादी", "विवाह")):
+        party_type, style = "wedding", "smart"
+    elif any(word in text for word in ("birthday", "जन्मदिन", "जन्मदिवस")):
+        party_type, style = "birthday", "casual"
+    elif any(word in text for word in ("night", "club", "concert", "dj", "नाइट")):
+        party_type, style = "night", "bold"
+    else:
+        party_type, style = "casual", "smart"
+
+    outfit_type = (
+        ethnic_item["category"] if party_type == "wedding"
+        and audience == "women" and ethnic_item
+        else "ethnic" if party_type == "wedding" and audience == "women"
+        else "any"
+    )
+    outfit = make_recommendation(
+        user_id, party_type, "warm", style, audience,
+        outfit_type=outfit_type
+    )
+    outfit["location"] = event["location"]
+    outfit["event_name"] = event["summary"]
+    outfit["event_starts_at"] = event["starts_at"]
+    outfit["weather_tip"] = (
+        "लुक अलमारी और कार्यक्रम के अनुसार चुना गया है। "
+        "निकलने से पहले कार्यक्रम के समय का मौसम देख लें।"
+    )
+    return outfit, {
+        "party_type": party_type,
+        "weather": "warm",
+        "style": style,
+        "audience": audience,
+        "outfit_type": outfit_type,
+        "location": event["location"]
+    }
+
+
+def fetch_map_json(url):
+    map_request = Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "PartyOutfitPlanner/1.0"
+        }
+    )
+    try:
+        with urlopen(map_request, timeout=12) as response:
+            body = response.read(2 * 1024 * 1024 + 1)
+    except HTTPError as error:
+        raise RuntimeError(f"Map service returned HTTP {error.code}.") from error
+    except (URLError, TimeoutError) as error:
+        raise RuntimeError("Map service is temporarily unavailable.") from error
+    if len(body) > 2 * 1024 * 1024:
+        raise RuntimeError("Map service response was too large.")
+    try:
+        return json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("Map service returned invalid data.") from error
+
+
+def route_to_event(location, origin_latitude, origin_longitude):
+    geocode_url = (
+        "https://nominatim.openstreetmap.org/search?"
+        + urlencode({"q": location, "format": "jsonv2", "limit": 1})
+    )
+    places = fetch_map_json(geocode_url)
+    if not places:
+        raise ValueError("कार्यक्रम का venue map पर नहीं मिला।")
+    destination_latitude = float(places[0]["lat"])
+    destination_longitude = float(places[0]["lon"])
+    route_url = (
+        "https://router.project-osrm.org/route/v1/driving/"
+        f"{origin_longitude},{origin_latitude};"
+        f"{destination_longitude},{destination_latitude}"
+        "?overview=full&geometries=geojson&steps=false"
+    )
+    route_data = fetch_map_json(route_url)
+    routes = route_data.get("routes", [])
+    if not routes:
+        raise ValueError("इस स्थान तक कोई सड़क मार्ग नहीं मिला।")
+    route = routes[0]
+    return {
+        "geometry": route["geometry"],
+        "distance_meters": route["distance"],
+        "duration_seconds": route["duration"],
+        "destination": {
+            "latitude": destination_latitude,
+            "longitude": destination_longitude
+        }
+    }
 
 
 def wardrobe_pick(
@@ -1303,6 +1630,185 @@ def register():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.post("/api/calendar/import")
+@login_required
+def import_calendar():
+    calendar_file = request.files.get("calendar")
+    if not calendar_file or not calendar_file.filename:
+        return jsonify({"error": "अपनी .ics calendar फ़ाइल चुनें।"}), 400
+    if not calendar_file.filename.lower().endswith(".ics"):
+        return jsonify({"error": "सिर्फ .ics calendar फ़ाइल इस्तेमाल करें।"}), 400
+
+    calendar_data = calendar_file.read(2 * 1024 * 1024 + 1)
+    if len(calendar_data) > 2 * 1024 * 1024:
+        return jsonify({"error": "Calendar फ़ाइल 2 MB से छोटी होनी चाहिए।"}), 413
+    try:
+        calendar_text = calendar_data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return jsonify({"error": "Calendar फ़ाइल UTF-8 format में नहीं है।"}), 400
+
+    timezone_name = request.form.get("timezone", "UTC")
+    try:
+        local_timezone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        return jsonify({"error": "डिवाइस का timezone पहचाना नहीं गया।"}), 400
+    try:
+        events = parse_icalendar_events(calendar_text, local_timezone)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    if not events:
+        return jsonify({
+            "error": "इस .ics फ़ाइल में कोई calendar event नहीं मिला।"
+        }), 400
+
+    with connect_db() as connection:
+        connection.execute(
+            "DELETE FROM calendar_events WHERE user_id = ?",
+            (session["user_id"],)
+        )
+        connection.executemany(
+            """INSERT INTO calendar_events
+               (user_id, uid, summary, starts_at, location)
+               VALUES (?, ?, ?, ?, ?)""",
+            [
+                (
+                    session["user_id"],
+                    event["uid"],
+                    event["summary"],
+                    event["starts_at"],
+                    event["location"]
+                )
+                for event in events
+            ]
+        )
+
+    upcoming = next_calendar_event(session["user_id"])
+    return jsonify({
+        "message": (
+            f"{len(events)} calendar event import हुए।"
+            if upcoming else
+            "Calendar import हुआ, लेकिन कोई आने वाला event नहीं मिला।"
+        ),
+        "event": upcoming,
+        "event_count": len(events)
+    })
+
+
+@app.get("/api/calendar/next")
+@login_required
+def get_next_calendar_event():
+    event = next_calendar_event(session["user_id"])
+    if not event:
+        return jsonify({
+            "event": None,
+            "message": "पहले future events वाली .ics calendar फ़ाइल import करें।"
+        })
+    return jsonify({"event": event})
+
+
+@app.post("/api/calendar/plan")
+@login_required
+def plan_for_next_event():
+    event = next_calendar_event(session["user_id"])
+    if not event:
+        return jsonify({
+            "error": "पहले future events वाली .ics calendar फ़ाइल import करें।"
+        }), 404
+    outfit, selection = auto_plan_for_event(session["user_id"], event)
+    return jsonify({"event": event, "outfit": outfit, "selection": selection})
+
+
+@app.post("/api/calendar/route")
+@login_required
+def get_event_route():
+    data = request.get_json(silent=True) or {}
+    event_id = data.get("event_id")
+    latitude = data.get("latitude")
+    longitude = data.get("longitude")
+    if (
+        not isinstance(event_id, int)
+        or isinstance(event_id, bool)
+        or not isinstance(latitude, (int, float))
+        or isinstance(latitude, bool)
+        or not isinstance(longitude, (int, float))
+        or isinstance(longitude, bool)
+        or not (-90 <= latitude <= 90)
+        or not (-180 <= longitude <= 180)
+    ):
+        return jsonify({"error": "Map के लिए current location मान्य नहीं है।"}), 400
+
+    with connect_db() as connection:
+        event = connection.execute(
+            """SELECT location FROM calendar_events
+               WHERE id = ? AND user_id = ?""",
+            (event_id, session["user_id"])
+        ).fetchone()
+    if not event:
+        return jsonify({"error": "यह calendar event नहीं मिला।"}), 404
+    if not event["location"].strip():
+        return jsonify({
+            "error": "इस calendar event में venue/location नहीं दिया गया है।"
+        }), 400
+
+    try:
+        route = route_to_event(
+            event["location"], float(latitude), float(longitude)
+        )
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 422
+    except (RuntimeError, KeyError, TypeError) as error:
+        app.logger.warning("Unable to create event route: %s", error)
+        return jsonify({
+            "error": "Map route अभी नहीं बन पाया। थोड़ी देर बाद फिर कोशिश करें।"
+        }), 502
+    return jsonify(route)
+
+
+@app.get("/api/catalog")
+@login_required
+def get_builtin_catalog():
+    return jsonify({"items": BUILTIN_CATALOG})
+
+
+@app.post("/api/wardrobe/sample")
+@login_required
+def add_sample_wardrobe():
+    user_id = session["user_id"]
+    added = 0
+    with connect_db() as connection:
+        for item in BUILTIN_CATALOG:
+            exists = connection.execute(
+                """SELECT 1 FROM wardrobe_items
+                   WHERE user_id = ? AND name = ? AND category = ?
+                     AND audience = 'all'
+                   LIMIT 1""",
+                (user_id, item["name"], item["category"])
+            ).fetchone()
+            if exists:
+                continue
+            connection.execute(
+                """INSERT INTO wardrobe_items
+                   (name, category, color, size, created_at, user_id, audience)
+                   VALUES (?, ?, ?, 'any', ?, ?, 'all')""",
+                (
+                    item["name"],
+                    item["category"],
+                    item["color"],
+                    datetime.now().isoformat(timespec="seconds"),
+                    user_id
+                )
+            )
+            added += 1
+    return jsonify({
+        "added": added,
+        "message": (
+            f"{added} sample items आपकी अलमारी में जोड़ दिए गए।"
+            if added else
+            "Sample catalog पहले से आपकी अलमारी में है।"
+        )
+    })
 
 
 @app.post("/api/recommend")

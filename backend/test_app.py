@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from io import BytesIO
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -177,6 +178,181 @@ class OutfitPlannerTests(unittest.TestCase):
 
         self.assertEqual(self.client.delete(f"/api/wardrobe/{item_id}").status_code, 200)
         self.assertEqual(self.client.get("/api/wardrobe").get_json()["items"], [])
+
+    def test_calendar_import_plans_next_event_from_wardrobe_and_saves(self):
+        self.register()
+        for name, category in (
+            ("My blue shirt", "top"),
+            ("My dark trousers", "bottom"),
+            ("My party shoes", "shoes"),
+            ("My watch", "accessory"),
+            ("My glasses", "eyewear"),
+        ):
+            self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "adult",
+                    "size": "any",
+                },
+            )
+
+        now = datetime.now(timezone.utc)
+        next_start = (now + timedelta(days=2)).strftime("%Y%m%dT%H%M%SZ")
+        later_start = (now + timedelta(days=5)).strftime("%Y%m%dT%H%M%SZ")
+        past_start = (now - timedelta(days=2)).strftime("%Y%m%dT%H%M%SZ")
+        calendar_text = f"""BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:later-event
+DTSTART:{later_start}
+SUMMARY:Birthday party
+END:VEVENT
+BEGIN:VEVENT
+UID:next-event
+DTSTART:{next_start}
+SUMMARY:Wedding reception
+LOCATION:Jaipur Convention Centre
+END:VEVENT
+BEGIN:VEVENT
+UID:past-event
+DTSTART:{past_start}
+SUMMARY:Past party
+END:VEVENT
+END:VCALENDAR
+"""
+        imported = self.client.post(
+            "/api/calendar/import",
+            data={
+                "calendar": (BytesIO(calendar_text.encode()), "events.ics"),
+                "timezone": "UTC",
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(imported.status_code, 200)
+        self.assertEqual(imported.get_json()["event_count"], 3)
+        self.assertEqual(imported.get_json()["event"]["summary"], "Wedding reception")
+
+        planned = self.client.post("/api/calendar/plan")
+        self.assertEqual(planned.status_code, 200)
+        result = planned.get_json()
+        self.assertEqual(result["selection"]["party_type"], "wedding")
+        self.assertEqual(result["event"]["location"], "Jaipur Convention Centre")
+        for expected_item in (
+            "My blue shirt", "My dark trousers", "My party shoes",
+            "My watch", "My glasses"
+        ):
+            self.assertTrue(any(
+                expected_item in result["outfit"][field]
+                for field in ("top", "bottom", "shoes", "accessory", "eyewear")
+            ))
+
+        saved = self.client.post(
+            "/api/outfits",
+            json={**result["selection"], "outfit": result["outfit"]},
+        )
+        self.assertEqual(saved.status_code, 201)
+        self.assertEqual(len(self.client.get("/api/outfits").get_json()["outfits"]), 1)
+
+    def test_calendar_route_uses_only_the_signed_in_users_event(self):
+        self.register()
+        start = (datetime.now(timezone.utc) + timedelta(days=1)).strftime(
+            "%Y%m%dT%H%M%SZ"
+        )
+        calendar_text = (
+            "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:route-event\n"
+            f"DTSTART:{start}\nSUMMARY:Party\nLOCATION:Jaipur\n"
+            "END:VEVENT\nEND:VCALENDAR\n"
+        )
+        imported = self.client.post(
+            "/api/calendar/import",
+            data={
+                "calendar": (BytesIO(calendar_text.encode()), "events.ics"),
+                "timezone": "UTC",
+            },
+            content_type="multipart/form-data",
+        )
+        event_id = imported.get_json()["event"]["id"]
+        route = {
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[75.8, 26.9], [75.9, 27.0]],
+            },
+            "distance_meters": 1200,
+            "duration_seconds": 600,
+            "destination": {"latitude": 27.0, "longitude": 75.9},
+        }
+        with patch.object(outfit_app, "route_to_event", return_value=route) as route_mock:
+            response = self.client.post(
+                "/api/calendar/route",
+                json={"event_id": event_id, "latitude": 26.9, "longitude": 75.8},
+            )
+        self.assertEqual(response.status_code, 200)
+        route_mock.assert_called_once_with("Jaipur", 26.9, 75.8)
+
+        other_client = outfit_app.app.test_client()
+        self.register(other_client, username="other_user")
+        hidden_event = other_client.post(
+            "/api/calendar/route",
+            json={"event_id": event_id, "latitude": 26.9, "longitude": 75.8},
+        )
+        self.assertEqual(hidden_event.status_code, 404)
+
+    def test_calendar_validation_and_builtin_catalog(self):
+        self.register()
+        invalid_timezone = self.client.post(
+            "/api/calendar/import",
+            data={
+                "calendar": (BytesIO(b"BEGIN:VCALENDAR\nEND:VCALENDAR"), "events.ics"),
+                "timezone": "Not/A_Timezone",
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(invalid_timezone.status_code, 400)
+
+        catalog = self.client.get("/api/catalog")
+        self.assertEqual(catalog.status_code, 200)
+        categories = {item["category"] for item in catalog.get_json()["items"]}
+        self.assertTrue({"top", "bottom", "shoes", "accessory", "eyewear"} <= categories)
+
+        first_add = self.client.post("/api/wardrobe/sample")
+        second_add = self.client.post("/api/wardrobe/sample")
+        self.assertEqual(first_add.status_code, 200)
+        self.assertGreater(first_add.get_json()["added"], 0)
+        self.assertEqual(second_add.get_json()["added"], 0)
+        wardrobe = self.client.get("/api/wardrobe").get_json()["items"]
+        self.assertEqual(len(wardrobe), first_add.get_json()["added"])
+
+    def test_calendar_expands_recurring_events_and_respects_excluded_dates(self):
+        self.register()
+        start = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ) - timedelta(days=2)
+        excluded = (start + timedelta(days=3)).strftime("%Y%m%dT%H%M%SZ")
+        calendar_text = (
+            "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:weekly-party\n"
+            f"DTSTART:{start.strftime('%Y%m%dT%H%M%SZ')}\n"
+            "RRULE:FREQ=DAILY;COUNT=8\n"
+            f"EXDATE:{excluded}\n"
+            "SUMMARY:Weekly party\nLOCATION:Jaipur\n"
+            "END:VEVENT\nEND:VCALENDAR\n"
+        )
+        response = self.client.post(
+            "/api/calendar/import",
+            data={
+                "calendar": (BytesIO(calendar_text.encode()), "events.ics"),
+                "timezone": "UTC",
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200)
+        next_event = response.get_json()["event"]
+        expected = (start + timedelta(days=4)).isoformat(timespec="seconds")
+        self.assertEqual(next_event["starts_at"], expected)
+        self.assertNotEqual(next_event["starts_at"], (
+            start + timedelta(days=3)
+        ).isoformat(timespec="seconds"))
 
     def test_save_list_and_delete_outfit(self):
         self.register()

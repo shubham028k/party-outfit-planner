@@ -10,6 +10,16 @@ const outfitTypeSelect = document.getElementById("outfitType");
 const bottomPreferenceLabel = document.querySelector('label[for="bottomPreference"]');
 const bottomPreferenceSelect = document.getElementById("bottomPreference");
 const locationInput = document.getElementById("location");
+const calendarForm = document.getElementById("calendarForm");
+const calendarFile = document.getElementById("calendarFile");
+const calendarMessage = document.getElementById("calendarMessage");
+const calendarEventPanel = document.getElementById("calendarEvent");
+const routeButton = document.getElementById("routeButton");
+const routeMessage = document.getElementById("routeMessage");
+const routeMapElement = document.getElementById("routeMap");
+const routeSummary = document.getElementById("routeSummary");
+let currentCalendarEvent = null;
+let routeMapInstance = null;
 
 async function readJsonResponse(response) {
   const contentType = (response.headers.get("content-type") || "").toLowerCase();
@@ -62,22 +72,6 @@ updateOutfitTypeFields();
 locationInput.addEventListener("input", () => {
   if (currentSelection) currentSelection.location = locationInput.value.trim();
 });
-
-function googleImagesSearchUrl(outfit) {
-  const searchTerms = [
-    outfit.top,
-    outfit.bottom,
-    outfit.shoes,
-    outfit.accessory,
-    outfit.design_title,
-    locationInput.value.trim() || outfit.location,
-    "party outfit"
-  ].filter((value) => typeof value === "string" && value.trim());
-  const searchUrl = new URL("https://www.google.com/search");
-  searchUrl.searchParams.set("tbm", "isch");
-  searchUrl.searchParams.set("q", searchTerms.join(" ").slice(0, 500));
-  return searchUrl.toString();
-}
 
 const categoryNames = {
   top: "शर्ट / टॉप",
@@ -353,10 +347,6 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorMessage.textContent = "";
   saveMessage.textContent = "";
-  const googleImagesTab = window.open("about:blank", "_blank");
-  if (googleImagesTab) {
-    googleImagesTab.opener = null;
-  }
 
   currentSelection = {
     party_type: document.getElementById("partyType").value,
@@ -386,15 +376,7 @@ form.addEventListener("submit", async (event) => {
     }
 
     showOutfit(data.outfit);
-    if (googleImagesTab && !googleImagesTab.closed) {
-      googleImagesTab.location.href = googleImagesSearchUrl(data.outfit);
-    } else if (!googleImagesTab) {
-      errorMessage.textContent = translateText(
-        "Google Images खोलने के लिए पॉप-अप की अनुमति दें। आपका लुक नीचे दिख रहा है और सेव किया जा सकता है।"
-      );
-    }
   } catch (error) {
-    if (googleImagesTab && !googleImagesTab.closed) googleImagesTab.close();
     errorMessage.textContent = translateText(error.message);
   } finally {
     button.disabled = false;
@@ -1027,7 +1009,34 @@ const englishText = {
   "फोटो देखकर सुझाव बनाया जा रहा है…": "Creating a suggestion from your photo…",
   "फोटो से सुझाव नहीं बन पाया।": "Could not create a suggestion from the photo.",
   "तुम्हारा फोटो-आधारित लुक तैयार है।": "Your photo-based look is ready.",
-  "Google Images खोलने के लिए पॉप-अप की अनुमति दें। आपका लुक नीचे दिख रहा है और सेव किया जा सकता है।": "Allow pop-ups to open Google Images. Your look is shown below and can be saved."
+  "मेरी जगह से रास्ता दिखाओ": "Show route from my location",
+  "Calendar import करके look बनाओ": "Import calendar and plan my look",
+  "इस browser में location की सुविधा उपलब्ध नहीं है।": "This browser does not support location access.",
+  "Location की अनुमति नहीं मिली। Browser में अनुमति देकर फिर कोशिश करें।": "Location permission was denied. Allow it in your browser and retry.",
+  "आपकी current location नहीं मिल पाई। उपलब्ध होने पर फिर कोशिश करें।": "Could not read your current location. Retry when location is available.",
+  "Calendar import हो रहा है…": "Importing calendar…",
+  "LOOKBOOK के अंदर का sample कपड़ों का catalog देखें": "Browse LOOKBOOK's built-in clothing catalog",
+  "पूरी sample अलमारी जोड़ें": "Add the full sample wardrobe",
+  "sample items आपकी अलमारी में जोड़ दिए गए।": "sample items were added to your wardrobe.",
+  "आपकी अलमारी में sample items पहले से हैं।": "Sample items are already in your wardrobe.",
+  "Map library load नहीं हुई। पेज refresh करके फिर कोशिश करें।": "The map library did not load. Refresh the page and retry.",
+  "अगले event का look नहीं बन पाया।": "Could not create a look for the next event.",
+  "Calendar import नहीं हुआ।": "The calendar could not be imported.",
+  "Sample wardrobe add नहीं हुई।": "Could not add the sample wardrobe.",
+  "Catalog load नहीं हो पाया।": "Could not load the catalog.",
+  "Map route नहीं बन पाया।": "Could not create the map route.",
+  "अपनी .ics calendar फ़ाइल चुनें।": "Choose your .ics calendar file.",
+  "सिर्फ .ics calendar फ़ाइल इस्तेमाल करें।": "Choose an .ics calendar file.",
+  "डिवाइस का timezone पहचाना नहीं गया।": "The device timezone could not be recognized.",
+  "इस .ics फ़ाइल में कोई calendar event नहीं मिला।": "No calendar events were found in this .ics file.",
+  "पहले future events वाली .ics calendar फ़ाइल import करें।": "Import an .ics calendar file with upcoming events first.",
+  "कार्यक्रम का venue map पर नहीं मिला।": "The event venue could not be found on the map.",
+  "इस स्थान तक कोई सड़क मार्ग नहीं मिला।": "No driving route was found to this location.",
+  "इस calendar event में venue/location नहीं दिया गया है।": "This calendar event has no venue or location.",
+  "Map के लिए current location मान्य नहीं है।": "The current location is not valid for the map.",
+  "यह calendar event नहीं मिला।": "Calendar event not found.",
+  "Map route अभी नहीं बन पाया। थोड़ी देर बाद फिर कोशिश करें।": "The map route could not be created. Try again shortly.",
+  "Calendar import हुआ, लेकिन कोई आने वाला event नहीं मिला।": "The calendar was imported, but no upcoming events were found."
 };
 
 function translateText(text) {
@@ -1094,12 +1103,21 @@ function applyPageLanguage() {
     '<span class="status-dot"></span> आपका स्टाइल असिस्टेंट'
   );
   setEnglish(".topbar-actions .logout-button", "Log out");
-  setEnglish(".hero-copy .eyebrow", "YOUR PLAN, YOUR STYLE", false, "तुम्हारी पार्टी, तुम्हारा स्टाइल");
-  setEnglish(".hero h1", "For the party,<br><span>the perfect look.</span>", true);
-  setEnglish(".hero-description", "Plan your next outfit around the party, weather, and your mood.");
+  setEnglish(".hero-copy .eyebrow", "YOUR PLAN, YOUR STYLE", false, "तुम्हारी अलमारी, तुम्हारा स्टाइल");
+  setEnglish(".hero h1", "Your wardrobe,<br><span>your next look.</span>", true);
+  setEnglish(".hero-description", "Import your next calendar event and get a complete look from your wardrobe.");
   setEnglish(".hero-tag", "LOOK GOOD.<br>FEEL GREAT.", true, "अच्छे दिखो।<br>खुश महसूस करो।");
 
-  setEnglish(".form-panel .eyebrow", "LET'S GET READY", false, "तैयारी शुरू करें");
+  setEnglish("#calendarTitle", "Get ready for your next event");
+  setEnglish(".calendar-intro", "Import an .ics file from your calendar. LOOKBOOK selects the next upcoming event and automatically creates a complete outfit from your wardrobe.");
+  setEnglish('label[for="calendarFile"]', "Calendar file (.ics)");
+  setEnglish("#calendarForm .primary-button span:first-child", "Import calendar and plan my look");
+  setEnglish(".calendar-privacy-note", "Only the event name, time, and venue are saved to your account; the original calendar file is not stored. A map route is created only when you request it; your current location and venue are sent to OpenStreetMap geocoding/routing services.");
+  setEnglish(".calendar-event .eyebrow", "NEXT UP");
+  setEnglish("#routeButton span", "Show route from my location");
+  setEnglish(".manual-planner-summary strong", "Choose party details manually");
+  setEnglish(".manual-planner-content .eyebrow", "MANUAL PLANNER", false, "MANUAL PLANNER");
+  setEnglish(".form-panel .section-heading h2", "Tell us about the party");
   setEnglish(".form-panel h2", "Tell us about the party");
   setEnglish('label[for="partyType"]', "What kind of party?");
   setEnglish('label[for="audience"]', "Who is the look for?");
@@ -1111,7 +1129,7 @@ function applyPageLanguage() {
   setEnglish("#location", "e.g. Jaipur");
   setEnglish(
     "#locationPrivacyNote",
-    "The city is saved with your look. For photo suggestions it is sent to Groq, and it is included in the Google Images search."
+    "This city is only saved with your manual look."
   );
   setEnglish('label[for="photoInput"]', "Your photo (optional)", false, "अपनी फोटो (वैकल्पिक)");
   setOption('#partyType option[value="birthday"]', "🎂 Birthday party");
@@ -1178,6 +1196,9 @@ function applyPageLanguage() {
   setOption('#wardrobeAudience option[value="all"]', "Everyone");
   setEnglish("#wardrobeForm .primary-button", "＋ Add to wardrobe");
   setEnglish("#emptyWardrobe", "Your wardrobe is empty. Add your clothes above.");
+  setEnglish(".catalog-details > summary", "Browse LOOKBOOK's built-in clothing catalog");
+  setEnglish(".catalog-details > .calendar-privacy-note", "These are built-in sample item names and categories, not images searched from the web. Empty categories also use the app's built-in outfit catalog.");
+  setEnglish("#addSampleWardrobe span", "Add the full sample wardrobe");
 
   setEnglish(
     ".photo-consent span",
@@ -1480,3 +1501,231 @@ analyzePhotoButton.addEventListener("click", async () => {
     analyzePhotoButton.disabled = false;
   }
 });
+
+function showCalendarEvent(event) {
+  currentCalendarEvent = event;
+  document.getElementById("calendarEventName").textContent = event.summary;
+  const start = new Date(event.starts_at);
+  document.getElementById("calendarEventTime").textContent =
+    Number.isNaN(start.getTime())
+      ? event.starts_at
+      : start.toLocaleString(appLanguage === "en" ? "en" : "hi-IN", {
+        dateStyle: "full",
+        timeStyle: "short"
+      });
+  document.getElementById("calendarEventLocation").textContent =
+    event.location || translateText("इस calendar event में venue/location नहीं दिया गया है।");
+  calendarEventPanel.hidden = false;
+  routeButton.disabled = !event.location;
+  routeMessage.textContent = "";
+  routeSummary.hidden = true;
+  routeMapElement.hidden = true;
+  if (routeMapInstance) {
+    routeMapInstance.remove();
+    routeMapInstance = null;
+  }
+}
+
+async function createNextEventLook() {
+  const response = await fetch("/api/calendar/plan", { method: "POST" });
+  const data = await readJsonResponse(response);
+  if (!response.ok) throw new Error(data.error || "अगले event का look नहीं बन पाया।");
+  currentSelection = data.selection;
+  showCalendarEvent(data.event);
+  showOutfit(data.outfit);
+}
+
+calendarForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  calendarMessage.textContent = "";
+  const submitButton = calendarForm.querySelector('button[type="submit"]');
+  const submitLabel = submitButton.querySelector("span");
+  submitButton.disabled = true;
+  submitLabel.textContent = appLanguage === "en" ? "Importing calendar…" : "Calendar import हो रहा है…";
+
+  const formData = new FormData(calendarForm);
+  formData.set(
+    "timezone",
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  );
+  try {
+    const response = await fetch("/api/calendar/import", {
+      method: "POST",
+      body: formData
+    });
+    const data = await readJsonResponse(response);
+    if (!response.ok) throw new Error(data.error || "Calendar import नहीं हुआ।");
+    calendarMessage.textContent = appLanguage === "en"
+      ? `${data.event_count} calendar event${data.event_count === 1 ? "" : "s"} imported.`
+      : translateText(data.message);
+    if (data.event) await createNextEventLook();
+  } catch (error) {
+    calendarMessage.textContent = translateText(error.message);
+  } finally {
+    submitButton.disabled = false;
+    submitLabel.textContent = translateText("Calendar import करके look बनाओ");
+  }
+});
+
+async function loadCalendarEvent() {
+  try {
+    const response = await fetch("/api/calendar/next");
+    const data = await readJsonResponse(response);
+    if (response.ok && data.event) {
+      showCalendarEvent(data.event);
+      await createNextEventLook();
+    }
+  } catch (error) {
+    calendarMessage.textContent = translateText(error.message);
+  }
+}
+
+function showRouteOnMap(route, origin) {
+  if (!window.L) throw new Error("Map library load नहीं हुई। पेज refresh करके फिर कोशिश करें।");
+  routeMapElement.hidden = false;
+  routeSummary.hidden = false;
+  routeMapInstance = L.map(routeMapElement);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(routeMapInstance);
+  const routeLayer = L.geoJSON({
+    type: "Feature",
+    properties: {},
+    geometry: route.geometry
+  }, {
+    style: { color: "#ff8fb3", weight: 5, opacity: 0.9 }
+  }).addTo(routeMapInstance);
+  const destination = [
+    route.destination.latitude,
+    route.destination.longitude
+  ];
+  L.marker([origin.latitude, origin.longitude])
+    .addTo(routeMapInstance)
+    .bindPopup(appLanguage === "en" ? "Your location" : "आपकी जगह");
+  L.marker(destination)
+    .addTo(routeMapInstance)
+    .bindPopup(currentCalendarEvent.location);
+  const bounds = routeLayer.getBounds().extend(destination).extend([
+    origin.latitude,
+    origin.longitude
+  ]);
+  routeMapInstance.fitBounds(bounds.pad(0.12));
+  const distance = new Intl.NumberFormat(
+    appLanguage === "en" ? "en" : "hi-IN",
+    { maximumFractionDigits: 1 }
+  ).format(route.distance_meters / 1000);
+  const minutes = Math.round(route.duration_seconds / 60);
+  routeSummary.textContent = appLanguage === "en"
+    ? `Driving route: ${distance} km · about ${minutes} min`
+    : `सड़क मार्ग: ${distance} km · लगभग ${minutes} मिनट`;
+}
+
+async function requestEventRoute(position) {
+  const origin = {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude
+  };
+  const response = await fetch("/api/calendar/route", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_id: currentCalendarEvent.id,
+      ...origin
+    })
+  });
+  const data = await readJsonResponse(response);
+  if (!response.ok) throw new Error(data.error || "Map route नहीं बन पाया।");
+  showRouteOnMap(data, origin);
+}
+
+routeButton.addEventListener("click", () => {
+  routeMessage.textContent = "";
+  if (!navigator.geolocation) {
+    routeMessage.textContent = appLanguage === "en"
+      ? "This browser does not support location access."
+      : "इस browser में location की सुविधा उपलब्ध नहीं है।";
+    return;
+  }
+  routeButton.disabled = true;
+  routeButton.querySelector("span").textContent =
+    appLanguage === "en" ? "Finding route…" : "रास्ता खोज रहे हैं…";
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      try {
+        await requestEventRoute(position);
+      } catch (error) {
+        routeMessage.textContent = translateText(error.message);
+      } finally {
+        routeButton.disabled = !currentCalendarEvent?.location;
+        routeButton.querySelector("span").textContent = translateText(
+          "मेरी जगह से रास्ता दिखाओ"
+        );
+      }
+    },
+    (error) => {
+      routeMessage.textContent = error.code === error.PERMISSION_DENIED
+        ? (appLanguage === "en"
+          ? "Location permission was denied. Allow it in your browser and retry."
+          : "Location की अनुमति नहीं मिली। Browser में अनुमति देकर फिर कोशिश करें।")
+        : (appLanguage === "en"
+          ? "Could not read your current location. Retry when location is available."
+          : "आपकी current location नहीं मिल पाई। उपलब्ध होने पर फिर कोशिश करें।");
+      routeButton.disabled = !currentCalendarEvent?.location;
+      routeButton.querySelector("span").textContent = translateText(
+        "मेरी जगह से रास्ता दिखाओ"
+      );
+    },
+    { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+  );
+});
+
+async function loadBuiltinCatalog() {
+  const catalogElement = document.getElementById("builtinCatalog");
+  try {
+    const response = await fetch("/api/catalog");
+    const data = await readJsonResponse(response);
+    if (!response.ok) throw new Error(data.error || "Catalog load नहीं हो पाया।");
+    const icons = {
+      top: "👕", bottom: "👖", shorts: "🩳", shoes: "👟",
+      accessory: "⌚", eyewear: "👓", saree: "🥻",
+      salwar: "👗", lehenga: "👗", kurti: "👚"
+    };
+    catalogElement.replaceChildren();
+    for (const item of data.items) {
+      const card = document.createElement("article");
+      card.className = "catalog-item";
+      const icon = document.createElement("span");
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = icons[item.category] || "✨";
+      const name = document.createElement("strong");
+      name.textContent = translateText(item.name);
+      const category = document.createElement("small");
+      category.textContent = translateText(categoryNames[item.category] || item.category);
+      card.append(icon, name, category);
+      catalogElement.append(card);
+    }
+  } catch (error) {
+    wardrobeMessage.textContent = translateText(error.message);
+  }
+}
+
+document.getElementById("addSampleWardrobe").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/wardrobe/sample", { method: "POST" });
+    const data = await readJsonResponse(response);
+    if (!response.ok) throw new Error(data.error || "Sample wardrobe add नहीं हुई।");
+    wardrobeMessage.textContent = translateText(data.message);
+    await loadWardrobe();
+    translateCards();
+  } catch (error) {
+    wardrobeMessage.textContent = translateText(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+loadBuiltinCatalog();
+loadCalendarEvent();

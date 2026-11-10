@@ -1,13 +1,15 @@
 # Party Outfit Planner
 
-A Flask-based outfit planner for choosing party looks by occasion, weather, style, and audience. It includes:
+A Flask-based party wardrobe planner. It includes:
 
-- outfit recommendation generation with wardrobe-aware matching
+- `.ics` calendar import (including recurring events) and automatic recommendations for the next upcoming event
+- complete outfit suggestions from your own wardrobe, including shoes, accessories, and eyewear
+- a built-in sample clothing catalog for wardrobes with missing items
+- an in-app OpenStreetMap route from the user's location to the event venue
 - optional traditional Indian outfit recommendations for women, including sarees, lehengas, and suits, with design details and an animated preview
 - personal wardrobe management and saved looks history
 - login/registration flow with SQLite persistence
 - optional photo-based recommendations using a Groq/OpenAI-compatible API
-- optional city/current-location context and Google Images search links for outfit inspiration
 
 ## Local setup
 
@@ -42,3 +44,8 @@ Or use the included Windows launcher:
 ## Deployment
 
 The included render.yaml config sets the app for Render, using Gunicorn and the backend directory as the app root. It also provisions a 1 GB persistent disk for SQLite at `/var/data`; persistent disks require a Render plan that supports them. Configure `GROQ_API_KEY` in the Render dashboard to enable photo analysis.
+
+Import an `.ics` calendar file in the app to plan for the next event. Importing a new file
+replaces the previously imported events for that account. The map uses OpenStreetMap
+geocoding/routing and map tiles; a route is requested only after the user grants browser
+location permission and clicks the route button. Browser location requires HTTPS or localhost.
