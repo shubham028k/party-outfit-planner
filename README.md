@@ -7,6 +7,7 @@ A Flask-based outfit planner for choosing party looks by occasion, weather, styl
 - personal wardrobe management and saved looks history
 - login/registration flow with SQLite persistence
 - optional photo-based recommendations using a Groq/OpenAI-compatible API
+- optional city/current-location context and Google Images search links for outfit inspiration
 
 ## Local setup
 

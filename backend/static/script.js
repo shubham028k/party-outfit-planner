@@ -9,6 +9,10 @@ const outfitTypeLabel = document.getElementById("outfitTypeLabel");
 const outfitTypeSelect = document.getElementById("outfitType");
 const bottomPreferenceLabel = document.querySelector('label[for="bottomPreference"]');
 const bottomPreferenceSelect = document.getElementById("bottomPreference");
+const locationInput = document.getElementById("location");
+const locationMessage = document.getElementById("locationMessage");
+const useCurrentLocationButton = document.getElementById("useCurrentLocation");
+const googleImagesLink = document.getElementById("googleImagesLink");
 
 async function readJsonResponse(response) {
   const contentType = (response.headers.get("content-type") || "").toLowerCase();
@@ -57,6 +61,90 @@ function updateOutfitTypeFields() {
 audienceSelect.addEventListener("change", updateOutfitTypeFields);
 outfitTypeSelect.addEventListener("change", updateOutfitTypeFields);
 updateOutfitTypeFields();
+
+locationInput.addEventListener("input", () => {
+  locationMessage.textContent = "";
+  if (currentSelection) currentSelection.location = locationInput.value.trim();
+  if (currentOutfit) updateGoogleImagesLink(currentOutfit);
+});
+
+useCurrentLocationButton.addEventListener("click", async () => {
+  if (!navigator.geolocation) {
+    locationMessage.textContent = translateText(
+      "यह ब्राउज़र लोकेशन की सुविधा नहीं देता।"
+    );
+    return;
+  }
+
+  useCurrentLocationButton.disabled = true;
+  locationMessage.textContent = translateText("लोकेशन खोजी जा रही है…");
+
+  try {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false,
+        maximumAge: 300000,
+        timeout: 10000
+      });
+    });
+    const parameters = new URLSearchParams({
+      format: "jsonv2",
+      lat: String(position.coords.latitude),
+      lon: String(position.coords.longitude),
+      zoom: "10",
+      addressdetails: "1"
+    });
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?${parameters.toString()}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!response.ok) {
+      throw new Error("शहर नहीं मिल पाया। शहर का नाम खुद लिखें।");
+    }
+
+    const result = await response.json();
+    const address = result.address || {};
+    const city = address.city
+      || address.town
+      || address.village
+      || address.municipality
+      || address.county
+      || address.state;
+    if (!city) throw new Error("शहर नहीं मिल पाया। शहर का नाम खुद लिखें।");
+
+    locationInput.value = city;
+    locationInput.dispatchEvent(new Event("input", { bubbles: true }));
+    locationMessage.textContent = translateText(`लोकेशन सेट: ${city}`);
+  } catch (error) {
+    if (error && error.code === 1) {
+      locationMessage.textContent = translateText(
+        "लोकेशन की अनुमति नहीं मिली। शहर का नाम खुद लिखें।"
+      );
+    } else {
+      locationMessage.textContent = translateText(
+        error.message || "लोकेशन नहीं मिल पाई। शहर का नाम खुद लिखें।"
+      );
+    }
+  } finally {
+    useCurrentLocationButton.disabled = false;
+  }
+});
+
+function updateGoogleImagesLink(outfit) {
+  const searchTerms = [
+    outfit.top,
+    outfit.bottom,
+    outfit.shoes,
+    outfit.accessory,
+    outfit.design_title,
+    locationInput.value.trim() || outfit.location,
+    "party outfit"
+  ].filter((value) => typeof value === "string" && value.trim());
+  const searchUrl = new URL("https://www.google.com/search");
+  searchUrl.searchParams.set("tbm", "isch");
+  searchUrl.searchParams.set("q", searchTerms.join(" ").slice(0, 500));
+  googleImagesLink.href = searchUrl.toString();
+}
 
 const categoryNames = {
   top: "शर्ट / टॉप",
@@ -322,7 +410,7 @@ updateWardrobeSizeField();
 
 function translateVisibleMessages() {
   document.querySelectorAll(
-    "#errorMessage, #saveMessage, #wardrobeMessage, #photoMessage, #analysisMessage"
+    "#errorMessage, #saveMessage, #wardrobeMessage, #photoMessage, #analysisMessage, #locationMessage"
   ).forEach((element) => {
     element.textContent = translateText(element.textContent);
   });
@@ -340,7 +428,7 @@ form.addEventListener("submit", async (event) => {
     audience: document.getElementById("audience").value,
     outfit_type: document.getElementById("outfitType").value,
     bottom_preference: document.getElementById("bottomPreference").value,
-    size_preference: document.getElementById("sizePreference").value
+    location: locationInput.value.trim()
   };
 
   const button = form.querySelector('button[type="submit"]');
@@ -993,7 +1081,13 @@ const englishText = {
   "पहले फोटो विश्लेषण की अनुमति दो।": "Consent to photo analysis first.",
   "फोटो देखकर सुझाव बनाया जा रहा है…": "Creating a suggestion from your photo…",
   "फोटो से सुझाव नहीं बन पाया।": "Could not create a suggestion from the photo.",
-  "तुम्हारा फोटो-आधारित लुक तैयार है।": "Your photo-based look is ready."
+  "तुम्हारा फोटो-आधारित लुक तैयार है।": "Your photo-based look is ready.",
+  "यह ब्राउज़र लोकेशन की सुविधा नहीं देता।": "This browser does not support location.",
+  "लोकेशन खोजी जा रही है…": "Finding your location…",
+  "शहर नहीं मिल पाया। शहर का नाम खुद लिखें।": "Could not find your city. Enter it manually.",
+  "लोकेशन की अनुमति नहीं मिली। शहर का नाम खुद लिखें।": "Location permission was denied. Enter your city manually.",
+  "लोकेशन नहीं मिल पाई। शहर का नाम खुद लिखें।": "Could not get your location. Enter your city manually.",
+  "लोकेशन सेट:": "Location set:"
 };
 
 function translateText(text) {
@@ -1073,7 +1167,16 @@ function applyPageLanguage() {
   setEnglish('label[for="style"]', "Choose a style");
   setEnglish('label[for="weather"]', "What's the weather?");
   setEnglish('label[for="bottomPreference"]', "Choose pants or shorts");
-  setEnglish('label[for="sizePreference"]', "Preferred clothing size");
+  setEnglish('label[for="location"]', "Location / city (optional)");
+  setEnglish("#location", "e.g. Jaipur");
+  setEnglish("#useCurrentLocation", "Use my current location");
+  setEnglish(
+    "#locationPrivacyNote",
+    'When you use current location, coordinates are sent to OpenStreetMap to find your city. The city is sent to Groq for photo suggestions and to Google Images searches, and is saved with a look if you save it. Choose weather separately. <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>',
+    true
+  );
+  setEnglish("#imageSearchNote", "View original images and their sources on Google Images; check image rights before using them.");
+  setEnglish("#googleImagesLink", "Find this look on Google Images ↗");
   setEnglish('label[for="photoInput"]', "Your photo (optional)", false, "अपनी फोटो (वैकल्पिक)");
   setOption('#partyType option[value="birthday"]', "🎂 Birthday party");
   setOption('#partyType option[value="wedding"]', "💐 Wedding party");
@@ -1096,7 +1199,6 @@ function applyPageLanguage() {
   setOption('#weather option[value="rainy"]', "🌧️ Rainy");
   setOption('#bottomPreference option[value="trousers"]', "Long pants");
   setOption('#bottomPreference option[value="shorts"]', "Shorts");
-  setOption('#sizePreference option[value="any"]', "Any / free size");
   setOption('#wardrobeSize option[value="any"]', "Any / free size");
   setEnglish('label[for="wardrobeSize"]', "Clothing size");
   setEnglish(".form-panel .primary-button span:first-child", "Suggest my look");
@@ -1294,6 +1396,7 @@ function renderLocalizedOutfit(outfit) {
   document.getElementById("outfitAccessory").textContent = outfit.accessory;
   document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
+  updateGoogleImagesLink(outfit);
   renderColorCombinations();
 }
 
@@ -1407,7 +1510,7 @@ analyzePhotoButton.addEventListener("click", async () => {
     audience: document.getElementById("audience").value,
     outfit_type: document.getElementById("outfitType").value,
     bottom_preference: document.getElementById("bottomPreference").value,
-    size_preference: document.getElementById("sizePreference").value
+    location: locationInput.value.trim()
   };
 
   const formData = new FormData();

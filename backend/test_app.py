@@ -68,6 +68,33 @@ class OutfitPlannerTests(unittest.TestCase):
         response = self.client.post("/api/recommend", json={"party_type": "unknown"})
         self.assertEqual(response.status_code, 400)
 
+    def test_recommendation_accepts_location_without_size_preference(self):
+        self.register()
+        response = self.client.post(
+            "/api/recommend",
+            json={
+                "party_type": "birthday",
+                "weather": "warm",
+                "style": "casual",
+                "audience": "men",
+                "location": "Jaipur",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["outfit"]["location"], "Jaipur")
+
+        response = self.client.post(
+            "/api/recommend",
+            json={
+                "party_type": "birthday",
+                "weather": "warm",
+                "style": "casual",
+                "audience": "men",
+                "location": "x" * 101,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_women_can_choose_ethnic_outfits(self):
         self.register()
         for party, style, expected in (
@@ -224,12 +251,14 @@ class OutfitPlannerTests(unittest.TestCase):
                     "outfit_type": "ethnic",
                     "bottom_preference": "trousers",
                     "size_preference": "any",
+                    "location": "Jaipur",
                 },
                 content_type="multipart/form-data",
             )
 
         self.assertEqual(response.status_code, 200)
         outfit = response.get_json()["outfit"]
+        self.assertEqual(outfit["location"], "Jaipur")
         self.assertEqual(outfit["design_type"], "saree")
         self.assertIn("ज़री बॉर्डर", outfit["design_details"])
 
