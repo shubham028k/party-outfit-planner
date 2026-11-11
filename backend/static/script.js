@@ -8,7 +8,6 @@ const partySearchInput = document.getElementById("partySearch");
 const eventDateInput = document.getElementById("eventDate");
 const eventDatePreview = document.getElementById("eventDatePreview");
 const eventLocationInput = document.getElementById("eventLocation");
-const personNameInput = document.getElementById("personName");
 const wardrobeSearch = document.getElementById("wardrobeSearch");
 const wardrobeSearchEmpty = document.getElementById("wardrobeSearchEmpty");
 let wardrobeItemsCache = [];
@@ -363,19 +362,6 @@ function translateVisibleMessages() {
   });
 }
 
-function renderPersonName(outfit) {
-  const personName = currentSelection?.person_name
-    || outfit.person_name
-    || personNameInput.value.trim();
-  const label = document.getElementById("personNameLabel");
-  label.hidden = !personName;
-  label.textContent = !personName
-    ? ""
-    : appLanguage === "en"
-      ? `For ${personName}`
-      : `${personName} के लिए`;
-}
-
 function renderWeatherOutfitImages(outfit) {
   const container = document.getElementById("weatherOutfitImages");
   const itemFields = [
@@ -411,7 +397,6 @@ form.addEventListener("submit", async (event) => {
     party_name: partySearchInput.value.trim(),
     event_date: eventDateInput.value,
     location: eventLocationInput.value.trim(),
-    person_name: personNameInput.value.trim(),
     language: appLanguage
   };
   currentSelection = null;
@@ -454,7 +439,6 @@ function showOutfit(outfit) {
     currentSelection?.outfit_type
   );
   document.getElementById("partyName").textContent = outfit.party_name;
-  renderPersonName(outfit);
   document.getElementById("styleName").textContent =
     `${outfit.audience_name} · ${outfit.style_name} स्टाइल`;
   document.getElementById("outfitTop").textContent = outfit.top;
@@ -1446,8 +1430,6 @@ function applyPageLanguage() {
   setEnglish("#partySearch", "e.g. wedding, birthday, or night party");
   setEnglish('label[for="eventDate"]', "When are you going?");
   setEnglish('label[for="eventLocation"]', "Where are you going?");
-  setEnglish('label[for="personName"]', "Whose name should be on the look?");
-  setEnglish("#personName", "Enter a name");
   setEnglish("#eventLocation", "City or region, e.g. Jaipur, Rajasthan, or Kashmir");
   setEnglish(".form-panel form > .planner-hint", "Enter a city or region and date. We’ll check the weather and match clothes to it; state-level weather is approximate.");
   setDatalistOptions(
@@ -1647,7 +1629,6 @@ function renderLocalizedOutfit(outfit) {
   currentOutfit = outfit;
   originalShowOutfit(outfit);
   document.getElementById("partyName").textContent = outfit.party_name;
-  renderPersonName(outfit);
   document.getElementById("styleName").textContent = appLanguage === "en"
     ? `${outfit.audience_name} · ${outfit.style_name} style`
     : `${outfit.audience_name} · ${outfit.style_name} स्टाइल`;

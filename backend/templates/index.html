@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#17152b">
   <title>पार्टी आउटफिट प्लानर · LOOKBOOK</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261111-7">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261111-8">
 </head>
 <body>
   <div class="page-shell">
@@ -63,10 +63,6 @@
                    placeholder="शहर या राज्य, जैसे जयपुर, राजस्थान या कश्मीर" required>
             <small class="planner-hint">शहर या राज्य और तारीख भरो—मौसम देखकर उसी के हिसाब से कपड़े सुझेंगे। राज्य का मौसम अनुमानित होगा।</small>
 
-            <label for="personName">किसके नाम से लुक बनाना है?</label>
-            <input id="personName" class="planner-input" name="person_name"
-                   type="text" maxlength="60" autocomplete="name"
-                   placeholder="नाम लिखें" required>
             <p id="plannerHint" class="planner-hint">चुनी तारीख और जगह का मौसम देखकर अलमारी से कपड़े अपने आप चुने जाएँगे।</p>
             <button class="primary-button" type="submit">
               <span>मेरी अलमारी से लुक सुझाओ</span><span aria-hidden="true">↗</span>
@@ -92,7 +88,6 @@
           <div id="outfitResult" class="outfit-result" hidden>
             <div class="look-label">
               <span id="partyName"></span>
-              <span id="personNameLabel" class="person-name-label" hidden></span>
               <span id="styleName"></span>
             </div>
             <p id="lookWeather" class="look-weather"></p>
@@ -251,6 +246,6 @@
     </footer>
   </div>
 
-  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-12"></script>
+  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-13"></script>
 </body>
 </html>
