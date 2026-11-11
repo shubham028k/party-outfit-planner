@@ -639,7 +639,6 @@ class OutfitPlannerTests(unittest.TestCase):
             "/api/wardrobe",
             json={
                 "name": "Oxford shirt",
-                "category": "top",
                 "color": "Navy",
                 "audience": "adult",
                 "size": "M",
@@ -647,7 +646,9 @@ class OutfitPlannerTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 201)
         item_id = response.get_json()["id"]
-        self.assertEqual(len(self.client.get("/api/wardrobe").get_json()["items"]), 1)
+        items = self.client.get("/api/wardrobe").get_json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["category"], "top")
 
         other_client = outfit_app.app.test_client()
         self.register(other_client, username="other_user")
@@ -658,6 +659,25 @@ class OutfitPlannerTests(unittest.TestCase):
 
         self.assertEqual(self.client.delete(f"/api/wardrobe/{item_id}").status_code, 200)
         self.assertEqual(self.client.get("/api/wardrobe").get_json()["items"], [])
+
+    def test_wardrobe_infers_category_from_item_name(self):
+        self.register()
+        for name, expected_category in (
+            ("Blue jeans", "bottom"),
+            ("Running shoes", "shoes"),
+            ("Silk saree", "saree"),
+            ("Gold watch", "accessory"),
+            ("IMG_1234", "top"),
+        ):
+            response = self.client.post(
+                "/api/wardrobe",
+                json={"name": name, "audience": "adult"},
+            )
+            self.assertEqual(response.status_code, 201)
+            self.assertEqual(
+                self.client.get("/api/wardrobe").get_json()["items"][0]["category"],
+                expected_category,
+            )
 
     def test_wardrobe_photo_upload_preview_and_user_isolation(self):
         self.register()

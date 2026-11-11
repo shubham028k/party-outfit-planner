@@ -408,6 +408,37 @@ def wardrobe_audience_options(audience):
     return (audience,)
 
 
+def infer_wardrobe_category(name):
+    normalized_name = name.casefold()
+    category_terms = (
+        ("saree", ("saree", "sari", "साड़ी", "साड़ी")),
+        ("lehenga", ("lehenga", "लहंगा", "लहँगा")),
+        ("salwar", ("salwar", "सलवार", "सलवार-सूट")),
+        ("kurti", ("kurti", "कुर्ती")),
+        ("shorts", ("shorts", "शॉर्ट्स")),
+        ("shoes", ("shoes", "shoe", "sneaker", "boots", "heels", "जूते", "जूती", "सैंडल")),
+        ("eyewear", ("glasses", "eyewear", "sunglasses", "चश्मा", "ऐनक")),
+        ("perfume", ("perfume", "cologne", "fragrance", "परफ्यूम", "इत्र")),
+        ("accessory", (
+            "accessory", "accessories", "watch", "belt", "jewelry", "jewellery",
+            "bag", "scarf", "घड़ी", "बेल्ट", "गहना", "बैग", "दुपट्टा", "एक्सेसरी"
+        )),
+        ("bottom", (
+            "trouser", "pants", "pant", "jeans", "skirt", "leggings", "पैंट",
+            "जींस", "जीन", "स्कर्ट", "लेगिंग"
+        )),
+        ("top", (
+            "shirt", "top", "t-shirt", "tshirt", "blouse", "sweater", "jacket",
+            "coat", "hoodie", "कमीज़", "कमीज", "शर्ट", "टॉप", "ब्लाउज़",
+            "ब्लाउज", "स्वेटर", "जैकेट", "कोट"
+        ))
+    )
+    for category, terms in category_terms:
+        if any(term in normalized_name for term in terms):
+            return category
+    return "top"
+
+
 def fit_note_for(audience, fit_preference):
     if audience == "children":
         return "बच्चे की माप देखकर सही साइज़ चुनें; कपड़ा आरामदायक हो और बहुत ढीला न हो।"
@@ -2322,7 +2353,7 @@ def add_wardrobe_item():
         else request.get_json(silent=True) or {}
     )
     name = str(data.get("name", "")).strip()
-    category = data.get("category")
+    category = data.get("category") or infer_wardrobe_category(name)
     audience = data.get("audience", "adult")
     weather = data.get("weather", "any")
     image = request.files.get("image")

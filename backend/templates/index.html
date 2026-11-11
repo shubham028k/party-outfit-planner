@@ -164,23 +164,6 @@
           </div>
 
           <div>
-            <label for="wardrobeCategory">कपड़े का प्रकार</label>
-            <select id="wardrobeCategory" required>
-              <option value="top">शर्ट / टॉप</option>
-              <option value="bottom">पैंट</option>
-              <option value="shorts">शॉर्ट्स</option>
-              <option value="shoes">जूते</option>
-              <option value="accessory">एक्सेसरी</option>
-              <option value="eyewear">👓 चश्मा</option>
-              <option value="perfume">🧴 परफ्यूम</option>
-              <option value="saree">साड़ी</option>
-              <option value="salwar">सलवार-सूट</option>
-              <option value="lehenga">लहंगा</option>
-              <option value="kurti">कुर्ती</option>
-            </select>
-          </div>
-
-          <div>
             <label for="wardrobeAudience">किसकी अलमारी?</label>
             <select id="wardrobeAudience" required>
               <option value="men">पुरुष</option>
@@ -207,7 +190,7 @@
             <input id="wardrobeImage" name="image" type="file" multiple
                    accept="image/jpeg,image/png,image/webp">
             <small id="wardrobeImageHint">एक या कई JPG, PNG या WebP फोटो चुनें · हर फोटो अधिकतम 5 MB</small>
-            <small id="wardrobeBatchHint">एक साथ चुनी गई सभी फोटो पर ऊपर चुना प्रकार, किसकी अलमारी और मौसम लागू होगा।</small>
+            <small id="wardrobeBatchHint">नाम से कपड़े का प्रकार अपने-आप पहचाना जाएगा; सही प्रकार न पहचान पाए तो शर्ट / टॉप माना जाएगा।</small>
             <small id="wardrobeImageCount" class="wardrobe-photo-count" hidden></small>
             <small id="wardrobePhotoNote" class="wardrobe-photo-note">
               चुनी गई फोटो तुम्हारी अलमारी में सेव होंगी और लुक में दिखाई देंगी।
@@ -268,6 +251,6 @@
     </footer>
   </div>
 
-  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-7"></script>
+  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-8"></script>
 </body>
 </html>

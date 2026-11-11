@@ -48,7 +48,6 @@ const wardrobeMessage = document.getElementById("wardrobeMessage");
 const wardrobeList = document.getElementById("wardrobeList");
 const emptyWardrobe = document.getElementById("emptyWardrobe");
 const wardrobeCount = document.getElementById("wardrobeCount");
-const wardrobeCategory = document.getElementById("wardrobeCategory");
 const wardrobeImageInput = document.getElementById("wardrobeImage");
 const wardrobeImagePreviewBox = document.getElementById("wardrobeImagePreviewBox");
 const wardrobeImagePreview = document.getElementById("wardrobeImagePreview");
@@ -539,20 +538,21 @@ saveButton.addEventListener("click", async () => {
   }
 });
 
-function wardrobePhotoName(file, index, category) {
+function wardrobePhotoName(file, index) {
   const sourceName = file.name
     .replace(/\.[^.]+$/, "")
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   const translated = translateText(sourceName);
-  if (translated && !hasWrongLanguageScript(translated)) {
+  if (
+    translated
+    && !hasWrongLanguageScript(translated)
+    && !/^(?:img|dsc|pxl|screenshot|photo|image)\s*\d*$/i.test(translated)
+  ) {
     return translated.slice(0, 60);
   }
-  const categoryName = appLanguage === "en"
-    ? translateText(categoryNames[category] || "Clothing item")
-    : (categoryNames[category] || "कपड़ा");
-  return `${categoryName} ${index + 1}`.slice(0, 60);
+  return (appLanguage === "en" ? `Clothing item ${index + 1}` : `कपड़ा ${index + 1}`).slice(0, 60);
 }
 
 function updateWardrobePhotoCount() {
@@ -571,7 +571,6 @@ wardrobeForm.addEventListener("submit", async (event) => {
 
   const selectedPhotos = Array.from(wardrobeImageInput.files || []);
   const enteredName = document.getElementById("wardrobeName").value.trim();
-  const category = wardrobeCategory.value;
   if (!enteredName && selectedPhotos.length === 0) {
     wardrobeMessage.textContent = translateText("कपड़े का नाम लिखें या फोटो चुनें।");
     return;
@@ -587,10 +586,9 @@ wardrobeForm.addEventListener("submit", async (event) => {
     for (const [index, photo] of itemsToAdd.entries()) {
       const formData = new FormData();
       const itemName = selectedPhotos.length > 1 || (!enteredName && photo)
-        ? wardrobePhotoName(photo, index, category)
+        ? wardrobePhotoName(photo, index)
         : enteredName;
       formData.set("name", itemName);
-      formData.set("category", category);
       formData.set("audience", document.getElementById("wardrobeAudience").value);
       formData.set("weather", document.getElementById("wardrobeWeather").value);
       if (photo) formData.set("image", photo);
@@ -1398,22 +1396,10 @@ function applyPageLanguage() {
   setEnglish("#wardrobeSearch", "shirt, pants, shoes, watch…");
   setEnglish("#wardrobeSearchEmpty", "No matching clothing item was found.");
   setEnglish('label[for="wardrobeName"]', "Item name (optional)");
-  setEnglish("#wardrobeNameHint", "For multiple photos, each item name comes from its file name.");
-  setEnglish('label[for="wardrobeCategory"]', "Item type");
+  setEnglish("#wardrobeNameHint", "For multiple photos, each item name comes from its file name. The item type is detected automatically.");
   setEnglish('label[for="wardrobeAudience"]', "Who is this item for?");
   setEnglish('label[for="wardrobeWeather"]', "Suitable weather");
   setEnglish("#wardrobeName", "e.g. Oxford shirt");
-  setOption('#wardrobeCategory option[value="top"]', "Shirt / top");
-  setOption('#wardrobeCategory option[value="bottom"]', "Pants");
-  setOption('#wardrobeCategory option[value="shorts"]', "Shorts");
-  setOption('#wardrobeCategory option[value="shoes"]', "Shoes");
-  setOption('#wardrobeCategory option[value="accessory"]', "Accessory");
-  setOption('#wardrobeCategory option[value="eyewear"]', "👓 Glasses");
-  setOption('#wardrobeCategory option[value="perfume"]', "🧴 Perfume");
-  setOption('#wardrobeCategory option[value="saree"]', "Saree");
-  setOption('#wardrobeCategory option[value="salwar"]', "Salwar suit");
-  setOption('#wardrobeCategory option[value="lehenga"]', "Lehenga");
-  setOption('#wardrobeCategory option[value="kurti"]', "Kurti");
   setOption('#wardrobeAudience option[value="adult"]', "Adult");
   setOption('#wardrobeAudience option[value="men"]', "Men");
   setOption('#wardrobeAudience option[value="women"]', "Women");
@@ -1426,7 +1412,7 @@ function applyPageLanguage() {
   setOption('#wardrobeWeather option[value="rainy"]', "Rainy");
   setEnglish('label[for="wardrobeImage"]', "Clothing photo(s) (optional)");
   setEnglish("#wardrobeImageHint", "Choose one or more JPG, PNG, or WebP photos · up to 5 MB each");
-  setEnglish("#wardrobeBatchHint", "All selected photos use the item type, audience, and weather chosen above.");
+  setEnglish("#wardrobeBatchHint", "The item type is detected from its name. Photos with unclear names are treated as shirts / tops.");
   updateWardrobePhotoCount();
   setEnglish("#wardrobePhotoNote", "Selected photos are saved with their items in your wardrobe and shown with their looks.");
   setEnglish("#removeWardrobeImage", "Remove photo");
