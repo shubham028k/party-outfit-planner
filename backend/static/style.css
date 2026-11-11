@@ -705,6 +705,24 @@ select:focus,
   font-size: 11px;
 }
 
+.wardrobe-image-field > small[hidden] {
+  display: none;
+}
+
+#wardrobeNameHint,
+.planner-hint {
+  display: block;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.wardrobe-image-field > #wardrobeImageCount {
+  color: var(--lavender);
+  font-weight: 700;
+}
+
 .wardrobe-image-field > .wardrobe-photo-note {
   color: var(--lavender);
 }

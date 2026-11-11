@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#17152b">
   <title>पार्टी आउटफिट प्लानर · LOOKBOOK</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261111">
 </head>
 <body>
   <div class="page-shell">
@@ -60,9 +60,10 @@
 
         <form id="wardrobeForm" class="wardrobe-form">
           <div>
-            <label for="wardrobeName">कपड़े का नाम</label>
+            <label for="wardrobeName">कपड़े का नाम (वैकल्पिक)</label>
             <input id="wardrobeName" type="text" maxlength="60"
-                   placeholder="जैसे: ऑक्सफ़ोर्ड शर्ट" required>
+                   placeholder="जैसे: ऑक्सफ़ोर्ड शर्ट">
+            <small id="wardrobeNameHint">कई फोटो चुनने पर हर कपड़े का नाम उसकी फ़ाइल से लिया जाएगा।</small>
           </div>
 
           <div>
@@ -129,14 +130,16 @@
 
           <div class="wardrobe-image-field">
             <label for="wardrobeImage">कपड़े की फोटो (वैकल्पिक)</label>
-            <input id="wardrobeImage" name="image" type="file"
+            <input id="wardrobeImage" name="image" type="file" multiple
                    accept="image/jpeg,image/png,image/webp">
-            <small>JPG, PNG या WebP · अधिकतम 5 MB</small>
+            <small id="wardrobeImageHint">एक या कई JPG, PNG या WebP फोटो चुनें · हर फोटो अधिकतम 5 MB</small>
+            <small id="wardrobeBatchHint">एक साथ चुनी गई सभी फोटो पर ऊपर चुना प्रकार, किसकी अलमारी और मौसम लागू होगा।</small>
+            <small id="wardrobeImageCount" class="wardrobe-photo-count" hidden></small>
             <small id="wardrobePhotoNote" class="wardrobe-photo-note">
-              यह फोटो तुम्हारी अलमारी में सेव होगी और लुक में दिखाई देगी।
+              चुनी गई फोटो तुम्हारी अलमारी में सेव होंगी और लुक में दिखाई देंगी।
             </small>
             <div id="wardrobeImagePreviewBox" class="wardrobe-image-preview" hidden>
-              <img id="wardrobeImagePreview" alt="कपड़े की फोटो का preview">
+              <img id="wardrobeImagePreview" alt="कपड़ों की फोटो की झलक">
               <button id="removeWardrobeImage" type="button" class="text-button">
                 फोटो हटाएँ
               </button>
@@ -208,6 +211,7 @@
               <option value="children">बच्चे</option>
               <option value="senior">बुज़ुर्ग</option>
             </select>
+            <p id="plannerHint" class="planner-hint">लिखे हुए मौसम के अनुसार अलमारी से कपड़े अपने आप चुने जाएँगे।</p>
             <button class="primary-button" type="submit">
               <span>मेरी अलमारी से लुक सुझाओ</span><span aria-hidden="true">↗</span>
             </button>
@@ -287,6 +291,6 @@
     </footer>
   </div>
 
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script src="{{ url_for('static', filename='script.js') }}?v=20261111"></script>
 </body>
 </html>
