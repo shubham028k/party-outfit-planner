@@ -387,6 +387,18 @@ WARDROBE_AUDIENCES = {
     "men", "women", "adult", "children", "senior", "all"
 }
 WARDROBE_WEATHER = {"any", "warm", "cold", "rainy"}
+REGIONAL_LOCATION_CENTERS = {
+    "rajasthan": (26.5, 73.8),
+    "राजस्थान": (26.5, 73.8),
+    "kashmir": (34.1, 74.8),
+    "kashmir valley": (34.1, 74.8),
+    "jammu and kashmir": (33.8, 76.0),
+    "jammu kashmir": (33.8, 76.0),
+    "jammu & kashmir": (33.8, 76.0),
+    "कश्मीर": (34.1, 74.8),
+    "जम्मू और कश्मीर": (33.8, 76.0),
+    "जम्मू-कश्मीर": (33.8, 76.0),
+}
 
 
 def wardrobe_audience_options(audience):
@@ -1078,23 +1090,37 @@ def weather_for_event(location, event_date):
     except (TypeError, ValueError) as error:
         raise ValueError("कार्यक्रम की सही तारीख चुनें।") from error
 
-    geocode_url = (
-        "https://geocoding-api.open-meteo.com/v1/search?"
-        + urlencode({"name": location, "count": 1, "language": "en", "format": "json"})
-    )
-    places = fetch_map_json(geocode_url, timeout=8)
-    if not isinstance(places, dict):
-        raise RuntimeError("Location service returned invalid data.")
-    results = places.get("results", [])
-    if not isinstance(results, list):
-        raise RuntimeError("Location service returned invalid results.")
-    if not results:
-        raise ValueError("यह शहर या venue map पर नहीं मिला।")
-    try:
-        latitude = float(results[0]["latitude"])
-        longitude = float(results[0]["longitude"])
-    except (KeyError, TypeError, ValueError) as error:
-        raise RuntimeError("Location service ने गलत coordinates दिए।") from error
+    normalized_location = location.casefold().strip()
+    for suffix in (", india", " india"):
+        if normalized_location.endswith(suffix):
+            normalized_location = normalized_location[:-len(suffix)].strip()
+            break
+    region_center = REGIONAL_LOCATION_CENTERS.get(normalized_location)
+    if region_center:
+        latitude, longitude = region_center
+    else:
+        geocode_url = (
+            "https://geocoding-api.open-meteo.com/v1/search?"
+            + urlencode({
+                "name": location,
+                "count": 1,
+                "language": "en",
+                "format": "json"
+            })
+        )
+        places = fetch_map_json(geocode_url, timeout=8)
+        if not isinstance(places, dict):
+            raise RuntimeError("Location service returned invalid data.")
+        results = places.get("results", [])
+        if not isinstance(results, list):
+            raise RuntimeError("Location service returned invalid results.")
+        if not results:
+            raise ValueError("यह शहर या venue map पर नहीं मिला।")
+        try:
+            latitude = float(results[0]["latitude"])
+            longitude = float(results[0]["longitude"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise RuntimeError("Location service ने गलत coordinates दिए।") from error
     if (
         not math.isfinite(latitude)
         or not math.isfinite(longitude)
@@ -1154,12 +1180,14 @@ def weather_for_event(location, event_date):
 
     snowy_codes = {71, 73, 75, 77, 85, 86}
     rainy_codes = {51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99}
-    if weather_code in snowy_codes:
+    if (
+        weather_code in snowy_codes
+        or minimum <= 12
+        or (minimum + maximum) / 2 <= 17
+    ):
         condition = "cold"
     elif weather_code in rainy_codes or precipitation >= 50:
         condition = "rainy"
-    elif minimum <= 12 or (minimum + maximum) / 2 <= 17:
-        condition = "cold"
     else:
         condition = "warm"
 
@@ -1943,6 +1971,35 @@ def plan_party_outfit():
     ):
         outfit["weather_tip"] = (
             "बर्फ़ की संभावना है—गर्म परतें, ऊनी मोज़े और ग्रिप वाले वाटरप्रूफ जूते रखें।"
+        )
+    elif weather_details and weather == "cold":
+        minimum = round(weather_details["temperature_min"])
+        maximum = round(weather_details["temperature_max"])
+        outfit["weather_tip"] = (
+            f"{location.strip()} में ठंड है ({minimum}–{maximum}°C)। "
+            "अलमारी से चुने ऊपर के कपड़े के साथ गर्म परतें, ऊनी मोज़े और बंद जूते पहनें। "
+            "अगर चुना कपड़ा जैकेट/कोट नहीं है, तो उसके ऊपर जैकेट या कोट पहनें।"
+        )
+        if (
+            weather_details.get("precipitation_probability", 0) >= 50
+            or weather_details.get("precipitation_sum", 0) >= 2.5
+        ):
+            outfit["weather_tip"] += (
+                " बारिश की संभावना के कारण छाता और पानी से बचाने वाली बाहरी परत रखें।"
+            )
+    elif weather_details and weather == "rainy":
+        minimum = round(weather_details["temperature_min"])
+        maximum = round(weather_details["temperature_max"])
+        outfit["weather_tip"] = (
+            f"{location.strip()} में बारिश की संभावना है ({minimum}–{maximum}°C)। "
+            "पानी से बचाने वाली हल्की जैकेट और ग्रिप वाले जूते पहनें; छाता साथ रखें।"
+        )
+    elif weather_details:
+        minimum = round(weather_details["temperature_min"])
+        maximum = round(weather_details["temperature_max"])
+        outfit["weather_tip"] = (
+            f"{location.strip()} में मौसम गर्म है ({minimum}–{maximum}°C)। "
+            "अपनी अलमारी से हल्के, सांस लेने वाले कपड़े चुनें; भारी जैकेट से बचें।"
         )
     outfit.update({
         "location": location.strip() if uses_forecast else "",

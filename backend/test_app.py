@@ -193,8 +193,8 @@ class OutfitPlannerTests(unittest.TestCase):
             "condition": "cold",
             "temperature_min": 7,
             "temperature_max": 15,
-            "precipitation_probability": 10,
-            "weather_code": 3,
+            "precipitation_probability": 90,
+            "weather_code": 61,
             "latitude": 26.9,
             "longitude": 75.8,
         }
@@ -219,6 +219,36 @@ class OutfitPlannerTests(unittest.TestCase):
         self.assertEqual(data["selection"]["event_date"], event_date)
         self.assertEqual(data["outfit"]["top"], "My winter jacket")
         self.assertEqual(data["outfit"]["weather_details"], forecast)
+        self.assertIn("जैकेट या कोट", data["outfit"]["weather_tip"])
+        self.assertIn("छाता", data["outfit"]["weather_tip"])
+
+    def test_party_plan_gives_light_clothing_advice_for_hot_destination(self):
+        self.register()
+        event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        forecast = {
+            "condition": "warm",
+            "temperature_min": 28,
+            "temperature_max": 40,
+            "precipitation_probability": 0,
+            "weather_code": 0,
+            "latitude": 26.9,
+            "longitude": 75.8,
+        }
+        with patch.object(
+            outfit_app, "weather_for_event", return_value=forecast
+        ):
+            response = self.client.post(
+                "/api/plan",
+                json={
+                    "party_name": "birthday",
+                    "event_date": event_date,
+                    "location": "Rajasthan",
+                    "audience": "men",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("हल्के, सांस लेने वाले कपड़े", response.get_json()["outfit"]["weather_tip"])
 
     def test_party_plan_requires_location_and_date_for_weather_forecast(self):
         self.register()
@@ -305,6 +335,48 @@ class OutfitPlannerTests(unittest.TestCase):
         self.assertIn("geocoding-api.open-meteo.com", fetch.call_args_list[0].args[0])
         self.assertIn("api.open-meteo.com", fetch.call_args_list[1].args[0])
         self.assertTrue(all(call.kwargs["timeout"] == 8 for call in fetch.call_args_list))
+
+    def test_weather_lookup_classifies_cold_rain_as_cold_for_closet_matching(self):
+        event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        geocoding = {"results": [{"latitude": 34.1, "longitude": 74.8}]}
+        forecast = {
+            "daily": {
+                "time": [event_date],
+                "temperature_2m_max": [11],
+                "temperature_2m_min": [6],
+                "precipitation_probability_max": [100],
+                "weather_code": [61],
+            }
+        }
+        with patch.object(
+            outfit_app, "fetch_map_json", side_effect=[geocoding, forecast]
+        ):
+            result = outfit_app.weather_for_event("Srinagar", event_date)
+
+        self.assertEqual(result["condition"], "cold")
+        self.assertEqual(result["precipitation_probability"], 100)
+
+    def test_weather_lookup_accepts_region_names_using_regional_coordinates(self):
+        event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        forecast = {
+            "daily": {
+                "time": [event_date],
+                "temperature_2m_max": [40],
+                "temperature_2m_min": [28],
+                "precipitation_probability_max": [0],
+                "weather_code": [0],
+            }
+        }
+        with patch.object(
+            outfit_app, "fetch_map_json", return_value=forecast
+        ) as fetch:
+            result = outfit_app.weather_for_event("Rajasthan, India", event_date)
+
+        self.assertEqual(result["condition"], "warm")
+        self.assertEqual(result["latitude"], 26.5)
+        self.assertEqual(result["longitude"], 73.8)
+        self.assertIn("api.open-meteo.com", fetch.call_args.args[0])
+        self.assertEqual(fetch.call_count, 1)
 
     def test_weather_lookup_reports_unknown_location(self):
         event_date = (datetime.now().date() + timedelta(days=1)).isoformat()

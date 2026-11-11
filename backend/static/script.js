@@ -1357,8 +1357,8 @@ function applyPageLanguage() {
   setEnglish("#partySearch", "e.g. wedding, birthday, or night party");
   setEnglish('label[for="eventDate"]', "When are you going?");
   setEnglish('label[for="eventLocation"]', "Where are you going?");
-  setEnglish("#eventLocation", "Destination city, e.g. Srinagar or Gulmarg");
-  setEnglish(".form-panel form > .planner-hint", "Enter a destination and date. We’ll check the weather and suggest clothes automatically; dates beyond 16 days use a climate estimate.");
+  setEnglish("#eventLocation", "City or region, e.g. Jaipur, Rajasthan, or Kashmir");
+  setEnglish(".form-panel form > .planner-hint", "Enter a city or region and date. We’ll check the weather and match clothes to it; state-level weather is approximate.");
   setEnglish('label[for="audience"]', "Who is the look for?");
   setDatalistOptions(
     "partySuggestions",
