@@ -170,6 +170,9 @@ class OutfitPlannerTests(unittest.TestCase):
         stored = self.client.get("/api/outfits").get_json()["outfits"][0]["outfit"]
         self.assertEqual(stored["event_date"], data["selection"]["event_date"])
         self.assertEqual(stored["item_images"], data["outfit"]["item_images"])
+        self.assertEqual(
+            stored["weather_outfit"], data["outfit"]["weather_outfit"]
+        )
 
     def test_party_plan_uses_forecast_condition_to_choose_my_closet_items(self):
         self.register()
@@ -219,6 +222,8 @@ class OutfitPlannerTests(unittest.TestCase):
         self.assertEqual(data["selection"]["event_date"], event_date)
         self.assertEqual(data["outfit"]["top"], "My winter jacket")
         self.assertEqual(data["outfit"]["weather_details"], forecast)
+        self.assertIn("थर्मल/ऊनी इनर", data["outfit"]["weather_outfit"])
+        self.assertIn("वाटरप्रूफ जैकेट", data["outfit"]["weather_outfit"])
         self.assertIn("जैकेट या कोट", data["outfit"]["weather_tip"])
         self.assertIn("छाता", data["outfit"]["weather_tip"])
 
@@ -248,7 +253,57 @@ class OutfitPlannerTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("हल्के, सांस लेने वाले कपड़े", response.get_json()["outfit"]["weather_tip"])
+        outfit = response.get_json()["outfit"]
+        self.assertIn("हल्के, सांस लेने वाले कपड़े", outfit["weather_tip"])
+        self.assertIn("सूती/लिनेन", outfit["weather_outfit"])
+
+    def test_weather_matched_outfit_changes_even_when_closet_items_are_all_weather(self):
+        self.register()
+        self.client.post(
+            "/api/wardrobe",
+            json={
+                "name": "My everyday shirt",
+                "category": "top",
+                "audience": "men",
+                "weather": "any",
+            },
+        )
+        event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        forecasts = (
+            {
+                "condition": "warm",
+                "temperature_min": 28,
+                "temperature_max": 40,
+                "precipitation_probability": 0,
+            },
+            {
+                "condition": "cold",
+                "temperature_min": 2,
+                "temperature_max": 8,
+                "precipitation_probability": 20,
+            },
+        )
+        responses = []
+        for location, forecast in zip(("Rajasthan", "Kashmir"), forecasts):
+            with patch.object(
+                outfit_app, "weather_for_event", return_value=forecast
+            ):
+                response = self.client.post(
+                    "/api/plan",
+                    json={
+                        "party_name": "birthday",
+                        "event_date": event_date,
+                        "location": location,
+                        "audience": "men",
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            responses.append(response.get_json()["outfit"])
+
+        self.assertEqual(responses[0]["top"], responses[1]["top"])
+        self.assertNotEqual(
+            responses[0]["weather_outfit"], responses[1]["weather_outfit"]
+        )
 
     def test_party_plan_requires_location_and_date_for_weather_forecast(self):
         self.register()

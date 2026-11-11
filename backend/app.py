@@ -496,8 +496,8 @@ def translate_outfit():
     language = data.get("language")
     outfit = data.get("outfit")
     fields = (
-        "top", "bottom", "shoes", "accessory", "weather_tip", "eyewear",
-        "perfume", "design_title", "design_details"
+        "top", "bottom", "shoes", "accessory", "weather_tip", "weather_outfit",
+        "eyewear", "perfume", "design_title", "design_details"
     )
 
     if language not in {"en", "hi"} or not isinstance(outfit, dict):
@@ -1898,6 +1898,41 @@ def normalize_weather_search(value):
     return None
 
 
+def weather_outfit_suggestion(weather, weather_details, location):
+    place = location.strip() if isinstance(location, str) else ""
+    minimum = weather_details.get("temperature_min")
+    maximum = weather_details.get("temperature_max")
+    temperature = (
+        f" ({round(minimum)}–{round(maximum)}°C)"
+        if isinstance(minimum, (int, float))
+        and isinstance(maximum, (int, float))
+        else ""
+    )
+    destination = f"{place}{temperature}: " if place or temperature else ""
+
+    if weather == "cold":
+        suggestion = (
+            "थर्मल/ऊनी इनर + स्वेटर + गर्म पैंट + जैकेट/कोट + ऊनी मोज़े "
+            "और बंद जूते पहनें।"
+        )
+        if (
+            weather_details.get("precipitation_probability", 0) >= 50
+            or weather_details.get("precipitation_sum", 0) >= 2.5
+            or weather_details.get("snowfall_sum", 0) >= 0.2
+        ):
+            suggestion += " वाटरप्रूफ जैकेट/कोट और छाता भी रखें।"
+        return f"{destination}ठंड के लिए: {suggestion}"
+    if weather == "rainy":
+        return (
+            f"{destination}बारिश के लिए: जल्दी सूखने वाले हल्के कपड़े + "
+            "वाटरप्रूफ जैकेट + ग्रिप वाले बंद जूते; छाता साथ रखें।"
+        )
+    return (
+        f"{destination}गर्मी के लिए: हल्की सूती/लिनेन शर्ट या टॉप + "
+        "सांस लेने वाली हल्की पैंट + आरामदायक जूते पहनें; भारी जैकेट न पहनें।"
+    )
+
+
 @app.post("/api/plan")
 @login_required
 def plan_party_outfit():
@@ -1961,6 +1996,9 @@ def plan_party_outfit():
     }[party]
     outfit = make_recommendation(
         session["user_id"], party, weather, style, audience
+    )
+    outfit["weather_outfit"] = weather_outfit_suggestion(
+        weather, weather_details or {}, location
     )
     if (
         weather_details
@@ -2216,7 +2254,9 @@ def save_outfit():
 
     supplied_outfit = data.get("outfit")
     if supplied_outfit is not None:
-        outfit_fields = ("top", "bottom", "shoes", "accessory", "weather_tip")
+        outfit_fields = (
+            "top", "bottom", "shoes", "accessory", "weather_tip"
+        )
         if not isinstance(supplied_outfit, dict) or any(
             not isinstance(supplied_outfit.get(field), str)
             or not supplied_outfit[field].strip()
@@ -2226,6 +2266,15 @@ def save_outfit():
             return jsonify({"error": "दिख रहे लुक की जानकारी सही नहीं है।"}), 400
 
         outfit = {field: supplied_outfit[field].strip() for field in outfit_fields}
+        supplied_weather_outfit = supplied_outfit.get("weather_outfit")
+        if supplied_weather_outfit is not None and (
+            not isinstance(supplied_weather_outfit, str)
+            or not supplied_weather_outfit.strip()
+            or len(supplied_weather_outfit) > 600
+        ):
+            return jsonify({"error": "मौसम के कपड़ों की सलाह सही नहीं है।"}), 400
+        if isinstance(supplied_weather_outfit, str):
+            outfit["weather_outfit"] = supplied_weather_outfit.strip()
         supplied_eyewear = supplied_outfit.get("eyewear")
         if supplied_eyewear is not None and (
             not isinstance(supplied_eyewear, str)

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#17152b">
   <title>पार्टी आउटफिट प्लानर · LOOKBOOK</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261111-4">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261111-5">
 </head>
 <body>
   <div class="page-shell">
@@ -97,6 +97,10 @@
               <span id="styleName"></span>
             </div>
             <p id="lookWeather" class="look-weather"></p>
+            <section id="weatherOutfitBox" class="weather-outfit" hidden>
+              <h3 id="weatherOutfitTitle">मौसम के हिसाब से पहनें</h3>
+              <p id="weatherOutfit"></p>
+            </section>
             <div class="outfit-items">
               <div class="outfit-item"><span class="outfit-visual">👕<img id="outfitTopImage" alt="" hidden></span><div><small>ऊपर</small><strong id="outfitTop"></strong></div></div>
               <div class="outfit-item"><span class="outfit-visual">👖<img id="outfitBottomImage" alt="" hidden></span><div><small>नीचे</small><strong id="outfitBottom"></strong></div></div>
@@ -267,6 +271,6 @@
     </footer>
   </div>
 
-  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-6"></script>
+  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-7"></script>
 </body>
 </html>

@@ -395,6 +395,8 @@ function showOutfit(outfit) {
   document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
   document.getElementById("outfitPerfume").textContent = outfit.perfume || "—";
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
+  document.getElementById("weatherOutfit").textContent = outfit.weather_outfit || "";
+  document.getElementById("weatherOutfitBox").hidden = !outfit.weather_outfit;
   renderLookWeather(
     currentSelection?.weather,
     currentOutfit?.weather_details,
@@ -1373,6 +1375,7 @@ function applyPageLanguage() {
 
   setEnglish(".result-panel .eyebrow", "MADE FOR YOUR PLAN", false, "तुम्हारे प्लान के लिए");
   setEnglish(".result-panel h2", "Your look");
+  setEnglish("#weatherOutfitTitle", "What to wear for this weather");
   setEnglish("#resultPlaceholder p", "Choose a party, date, and location.<br>Your weather-matched wardrobe look will appear here.", true);
   setEnglish("#designIdea .eyebrow", "DESIGN INSPIRATION", false, "डिज़ाइन की झलक");
   setEnglish("#colorIdeasTitle", "Clothing and shoe color combinations");
@@ -1475,8 +1478,8 @@ let lastOutfit = null;
 let outfitTranslationRequest = 0;
 
 const outfitTranslationFields = [
-  "top", "bottom", "shoes", "accessory", "weather_tip", "eyewear", "perfume",
-  "design_title", "design_details"
+  "top", "bottom", "shoes", "accessory", "weather_tip", "weather_outfit",
+  "eyewear", "perfume", "design_title", "design_details"
 ];
 
 function hasWrongLanguageScript(text) {
@@ -1514,6 +1517,17 @@ function outfitFallbackValues(outfitType) {
     weather_tip: appLanguage === "en"
       ? "Choose comfortable layers for the weather."
       : "मौसम के अनुसार आरामदायक कपड़े चुनें।",
+    weather_outfit: appLanguage === "en"
+      ? currentSelection?.weather === "cold"
+        ? "Cold weather: thermal base layer, sweater, warm trousers, jacket or coat, wool socks, and closed shoes."
+        : currentSelection?.weather === "rainy"
+          ? "Rainy weather: quick-drying clothes, waterproof jacket, grippy closed shoes, and an umbrella."
+          : "Warm weather: lightweight cotton or linen top, breathable trousers, and comfortable shoes; skip heavy jackets."
+      : currentSelection?.weather === "cold"
+        ? "ठंड के लिए: थर्मल इनर, स्वेटर, गर्म पैंट, जैकेट/कोट, ऊनी मोज़े और बंद जूते पहनें।"
+        : currentSelection?.weather === "rainy"
+          ? "बारिश के लिए: जल्दी सूखने वाले कपड़े, वाटरप्रूफ जैकेट, ग्रिप वाले बंद जूते और छाता रखें।"
+          : "गर्मी के लिए: हल्की सूती/लिनेन शर्ट या टॉप, हल्की पैंट और आरामदायक जूते पहनें; भारी जैकेट न पहनें।",
     eyewear: appLanguage === "en"
       ? "Wear your preferred glasses if needed."
       : "ज़रूरत हो तो अपना पसंदीदा चश्मा पहनें।",
@@ -1570,6 +1584,8 @@ function renderLocalizedOutfit(outfit) {
   document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
   document.getElementById("outfitPerfume").textContent = outfit.perfume || "—";
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
+  document.getElementById("weatherOutfit").textContent = outfit.weather_outfit || "";
+  document.getElementById("weatherOutfitBox").hidden = !outfit.weather_outfit;
   renderColorCombinations();
 }
 
