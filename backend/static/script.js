@@ -334,6 +334,19 @@ function translateVisibleMessages() {
   });
 }
 
+function renderPersonName(outfit) {
+  const personName = currentSelection?.person_name
+    || outfit.person_name
+    || personNameInput.value.trim();
+  const label = document.getElementById("personNameLabel");
+  label.hidden = !personName;
+  label.textContent = !personName
+    ? ""
+    : appLanguage === "en"
+      ? `For ${personName}`
+      : `${personName} के लिए`;
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorMessage.textContent = "";
@@ -386,8 +399,9 @@ function showOutfit(outfit) {
     currentSelection?.outfit_type
   );
   document.getElementById("partyName").textContent = outfit.party_name;
+  renderPersonName(outfit);
   document.getElementById("styleName").textContent =
-    `${currentSelection?.person_name || outfit.audience_name} · ${outfit.style_name} स्टाइल`;
+    `${outfit.audience_name} · ${outfit.style_name} स्टाइल`;
   document.getElementById("outfitTop").textContent = outfit.top;
   document.getElementById("outfitBottom").textContent = outfit.bottom;
   document.getElementById("outfitShoes").textContent = outfit.shoes;
@@ -1565,9 +1579,10 @@ function renderLocalizedOutfit(outfit) {
   currentOutfit = outfit;
   originalShowOutfit(outfit);
   document.getElementById("partyName").textContent = outfit.party_name;
+  renderPersonName(outfit);
   document.getElementById("styleName").textContent = appLanguage === "en"
-    ? `${currentSelection?.person_name || outfit.audience_name} · ${outfit.style_name} style`
-    : `${currentSelection?.person_name || outfit.audience_name} · ${outfit.style_name} स्टाइल`;
+    ? `${outfit.audience_name} · ${outfit.style_name} style`
+    : `${outfit.audience_name} · ${outfit.style_name} स्टाइल`;
   document.getElementById("outfitTop").textContent = outfit.top;
   document.getElementById("outfitBottom").textContent = outfit.bottom;
   document.getElementById("outfitShoes").textContent = outfit.shoes;

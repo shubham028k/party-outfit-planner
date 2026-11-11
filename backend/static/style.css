@@ -425,6 +425,10 @@ select:focus,
   color: var(--lavender);
 }
 
+.look-label .person-name-label {
+  color: var(--pink);
+}
+
 .outfit-items {
   display: grid;
   grid-template-columns: 1fr 1fr;
