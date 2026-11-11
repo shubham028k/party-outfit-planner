@@ -1012,15 +1012,6 @@ def weather_for_event(location, event_date):
     except (TypeError, ValueError) as error:
         raise ValueError("कार्यक्रम की सही तारीख चुनें।") from error
 
-    today = datetime.now().date()
-    forecast_end = today + timedelta(days=15)
-    if requested_date < today:
-        raise ValueError("कार्यक्रम की तारीख आज या आने वाले दिनों में होनी चाहिए।")
-    if requested_date > forecast_end:
-        raise ValueError(
-            "अभी मौसम का अनुमान अगले 16 दिनों तक उपलब्ध है। पास की तारीख चुनें।"
-        )
-
     geocode_url = (
         "https://nominatim.openstreetmap.org/search?"
         + urlencode({"q": location, "format": "jsonv2", "limit": 1})
@@ -1063,7 +1054,20 @@ def weather_for_event(location, event_date):
     if not isinstance(daily, dict):
         raise RuntimeError("मौसम सेवा ने गलत daily forecast दिया।")
     dates = daily.get("time", [])
-    if not isinstance(dates, list) or requested_date.isoformat() not in dates:
+    if not isinstance(dates, list) or not dates:
+        raise RuntimeError("मौसम सेवा ने इस तारीख का अनुमान नहीं दिया।")
+    if requested_date.isoformat() not in dates:
+        try:
+            forecast_start = datetime.strptime(dates[0], "%Y-%m-%d").date()
+            forecast_end = datetime.strptime(dates[-1], "%Y-%m-%d").date()
+        except (TypeError, ValueError) as error:
+            raise RuntimeError("मौसम सेवा ने गलत तारीखें दीं।") from error
+        if requested_date < forecast_start:
+            raise ValueError("कार्यक्रम की तारीख आज या आने वाले दिनों में होनी चाहिए।")
+        if requested_date > forecast_end:
+            raise ValueError(
+                "अभी मौसम का अनुमान अगले 16 दिनों तक उपलब्ध है। पास की तारीख चुनें।"
+            )
         raise RuntimeError("मौसम सेवा ने इस तारीख का अनुमान नहीं दिया।")
     index = dates.index(requested_date.isoformat())
     try:
@@ -1801,18 +1805,50 @@ def plan_party_outfit():
     if not isinstance(data, dict):
         return jsonify({"error": "पार्टी की जानकारी सही नहीं है।"}), 400
     party = normalize_party_search(data.get("party_name", data.get("party_type")))
-    weather = normalize_weather_search(data.get("weather_name", data.get("weather")))
+    location = data.get("location")
+    event_date = data.get("event_date")
+    uses_forecast = location is not None or event_date is not None
     audience = data.get("audience")
     language = data.get("language", "hi")
 
     if (
         party not in PARTY_NAMES
-        or weather not in {"warm", "cold", "rainy"}
         or not isinstance(audience, str)
         or audience not in AUDIENCE_NAMES
         or not isinstance(language, str)
         or language not in {"hi", "en"}
     ):
+        return jsonify({
+            "error": "पार्टी का नाम, मौसम और किसके लिए लुक है—ये जानकारी जाँचें।"
+        }), 400
+
+    if uses_forecast and (
+        not isinstance(location, str)
+        or not location.strip()
+        or len(location.strip()) > 100
+        or not isinstance(event_date, str)
+    ):
+        return jsonify({
+            "error": "मौसम जानने के लिए कार्यक्रम की तारीख और जगह दोनों भरें।"
+        }), 400
+
+    weather_details = None
+    if uses_forecast:
+        try:
+            weather_details = weather_for_event(location.strip(), event_date)
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 422
+        except (RuntimeError, KeyError, TypeError) as error:
+            app.logger.warning("Unable to get event weather: %s", error)
+            return jsonify({
+                "error": "मौसम की जानकारी अभी नहीं मिल पाई। थोड़ी देर बाद फिर कोशिश करें।"
+            }), 502
+        weather = weather_details["condition"]
+    else:
+        weather = normalize_weather_search(
+            data.get("weather_name", data.get("weather"))
+        )
+    if weather not in {"warm", "cold", "rainy"}:
         return jsonify({
             "error": "पार्टी का नाम, मौसम और किसके लिए लुक है—ये जानकारी जाँचें।"
         }), 400
@@ -1827,9 +1863,11 @@ def plan_party_outfit():
         session["user_id"], party, weather, style, audience
     )
     outfit.update({
-        "location": "",
-        "weather_details": {"condition": weather}
+        "location": location.strip() if uses_forecast else "",
+        "weather_details": weather_details or {"condition": weather}
     })
+    if uses_forecast:
+        outfit["event_date"] = event_date
     return jsonify({
         "outfit": outfit,
         "selection": {
@@ -1839,8 +1877,8 @@ def plan_party_outfit():
             "audience": audience,
             "bottom_preference": "trousers",
             "outfit_type": "any",
-            "location": "",
-            "event_date": None
+            "location": location.strip() if uses_forecast else "",
+            "event_date": event_date if uses_forecast else None
         }
     })
 

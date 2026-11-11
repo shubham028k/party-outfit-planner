@@ -5,10 +5,21 @@ const saveButton = document.getElementById("saveButton");
 const resultPlaceholder = document.getElementById("resultPlaceholder");
 const outfitResult = document.getElementById("outfitResult");
 const partySearchInput = document.getElementById("partySearch");
-const weatherInput = document.getElementById("weatherInput");
+const eventDateInput = document.getElementById("eventDate");
+const eventLocationInput = document.getElementById("eventLocation");
 const wardrobeSearch = document.getElementById("wardrobeSearch");
 const wardrobeSearchEmpty = document.getElementById("wardrobeSearchEmpty");
 let wardrobeItemsCache = [];
+
+function dateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+eventDateInput.min = dateInputValue(new Date());
+eventDateInput.value = eventDateInput.min;
 
 async function readJsonResponse(response) {
   const contentType = (response.headers.get("content-type") || "").toLowerCase();
@@ -330,7 +341,8 @@ form.addEventListener("submit", async (event) => {
 
   const selection = {
     party_name: partySearchInput.value.trim(),
-    weather_name: weatherInput.value.trim(),
+    event_date: eventDateInput.value,
+    location: eventLocationInput.value.trim(),
     audience: document.getElementById("audience").value,
     language: appLanguage
   };
@@ -383,7 +395,12 @@ function showOutfit(outfit) {
   document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
   document.getElementById("outfitPerfume").textContent = outfit.perfume || "—";
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
-  renderLookWeather(currentSelection?.weather);
+  renderLookWeather(
+    currentSelection?.weather,
+    currentOutfit?.weather_details,
+    currentSelection?.location,
+    currentSelection?.event_date
+  );
   const imageFields = {
     outfitTopImage: "top",
     outfitBottomImage: "bottom",
@@ -439,7 +456,7 @@ function updateOutfitItemLabels(audience, outfitType) {
   });
 }
 
-function renderLookWeather(weather) {
+function renderLookWeather(weather, details, location, eventDate) {
   const element = document.getElementById("lookWeather");
   if (!element || !weather) return;
   const labels = {
@@ -448,7 +465,26 @@ function renderLookWeather(weather) {
     rainy: ["बारिश", "Rainy"]
   };
   const label = labels[weather]?.[appLanguage === "en" ? 1 : 0] || weather;
-  element.textContent = appLanguage === "en" ? `Weather: ${label}` : `मौसम: ${label}`;
+  const temperature = details
+    && Number.isFinite(details.temperature_min)
+    && Number.isFinite(details.temperature_max)
+    ? ` · ${Math.round(details.temperature_min)}–${Math.round(details.temperature_max)}°C`
+    : "";
+  const rainChance = details && Number.isFinite(details.precipitation_probability)
+    ? appLanguage === "en"
+      ? ` · ${Math.round(details.precipitation_probability)}% rain chance`
+      : ` · बारिश की संभावना ${Math.round(details.precipitation_probability)}%`
+    : "";
+  const date = eventDate
+    ? ` · ${new Intl.DateTimeFormat(
+      appLanguage === "en" ? "en" : "hi",
+      { dateStyle: "medium" }
+    ).format(new Date(`${eventDate}T00:00:00`))}`
+    : "";
+  const place = location ? ` · ${location}` : "";
+  element.textContent = appLanguage === "en"
+    ? `Weather: ${label}${temperature}${rainChance}${place}${date}`
+    : `मौसम: ${label}${temperature}${rainChance}${place}${date}`;
 }
 
 saveButton.addEventListener("click", async () => {
@@ -1298,25 +1334,22 @@ function applyPageLanguage() {
   setEnglish(".topbar-actions .logout-button", "Log out");
   setEnglish(".hero-copy .eyebrow", "YOUR PLAN, YOUR STYLE", false, "तुम्हारी अलमारी, तुम्हारा स्टाइल");
   setEnglish(".hero h1", "Your wardrobe,<br><span>your next look.</span>", true);
-  setEnglish(".hero-description", "Add clothing photos to your digital wardrobe. Search for a party, enter the weather, and get a look from your saved clothes.");
+  setEnglish(".hero-description", "Add clothing photos to your digital wardrobe. Choose a party, date, and location to get a weather-matched look from your saved clothes.");
   setEnglish(".hero-tag", "LOOK GOOD.<br>FEEL GREAT.", true, "अच्छे दिखो।<br>खुश महसूस करो।");
 
   setEnglish("#plannerTitle", "Tell us about the party");
-  setEnglish("#plannerHint", "Your saved clothes will be selected automatically based on the weather you enter.");
+  setEnglish("#plannerHint", "Your saved clothes will be selected automatically using the forecast for your chosen date and location.");
   setEnglish('label[for="partySearch"]', "Search party name");
   setEnglish("#partySearch", "e.g. wedding, birthday, or night party");
-  setEnglish('label[for="weatherInput"]', "Enter the weather");
-  setEnglish("#weatherInput", "e.g. warm, cold, or rainy");
+  setEnglish('label[for="eventDate"]', "When are you going?");
+  setEnglish('label[for="eventLocation"]', "Where are you going?");
+  setEnglish("#eventLocation", "City or place, e.g. Jaipur");
+  setEnglish(".form-panel form > .planner-hint", "We’ll check the forecast for the next 16 days and choose clothes from your wardrobe.");
   setEnglish('label[for="audience"]', "Who is the look for?");
   setDatalistOptions(
     "partySuggestions",
     ["शादी की पार्टी", "बर्थडे पार्टी", "कैज़ुअल पार्टी", "नाइट पार्टी"],
     ["Wedding party", "Birthday party", "Casual party", "Night party"]
-  );
-  setDatalistOptions(
-    "weatherSuggestions",
-    ["गर्मी", "ठंड", "बारिश"],
-    ["Warm", "Cold", "Rainy"]
   );
   setOption('#audience option[value="men"]', "Men");
   setOption('#audience option[value="women"]', "Women");
@@ -1326,7 +1359,7 @@ function applyPageLanguage() {
 
   setEnglish(".result-panel .eyebrow", "MADE FOR YOUR PLAN", false, "तुम्हारे प्लान के लिए");
   setEnglish(".result-panel h2", "Your look");
-  setEnglish("#resultPlaceholder p", "Search for a party and enter the weather.<br>Your wardrobe look will appear here.", true);
+  setEnglish("#resultPlaceholder p", "Choose a party, date, and location.<br>Your weather-matched wardrobe look will appear here.", true);
   setEnglish("#designIdea .eyebrow", "DESIGN INSPIRATION", false, "डिज़ाइन की झलक");
   setEnglish("#colorIdeasTitle", "Clothing and shoe color combinations");
   setEnglish("#saveButton span", "Save this look");

@@ -171,15 +171,15 @@
               <option value="नाइट पार्टी"></option>
             </datalist>
 
-            <label for="weatherInput">मौसम लिखें</label>
-            <input id="weatherInput" class="planner-input" name="weather_name"
-                   list="weatherSuggestions" maxlength="40" autocomplete="off"
-                   placeholder="गर्मी, ठंड या बारिश" required>
-            <datalist id="weatherSuggestions">
-              <option value="गर्मी"></option>
-              <option value="ठंड"></option>
-              <option value="बारिश"></option>
-            </datalist>
+            <label for="eventDate">कब जाना है?</label>
+            <input id="eventDate" class="planner-input" name="event_date"
+                   type="date" required>
+
+            <label for="eventLocation">कहाँ जाना है?</label>
+            <input id="eventLocation" class="planner-input" name="location"
+                   type="text" maxlength="100" autocomplete="street-address"
+                   placeholder="शहर या जगह, जैसे जयपुर" required>
+            <small class="planner-hint">अगले 16 दिनों का मौसम देखकर अलमारी से कपड़े चुनेंगे।</small>
 
             <label for="audience">लुक किसके लिए है?</label>
             <select id="audience" name="audience" required>
@@ -188,7 +188,7 @@
               <option value="children">बच्चे</option>
               <option value="senior">बुज़ुर्ग</option>
             </select>
-            <p id="plannerHint" class="planner-hint">लिखे हुए मौसम के अनुसार अलमारी से कपड़े अपने आप चुने जाएँगे।</p>
+            <p id="plannerHint" class="planner-hint">चुनी तारीख और जगह का मौसम देखकर अलमारी से कपड़े अपने आप चुने जाएँगे।</p>
             <button class="primary-button" type="submit">
               <span>मेरी अलमारी से लुक सुझाओ</span><span aria-hidden="true">↗</span>
             </button>
@@ -269,6 +269,6 @@
     </footer>
   </div>
 
-  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-3"></script>
+  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-4"></script>
 </body>
 </html>

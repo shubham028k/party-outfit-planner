@@ -149,6 +149,10 @@ class OutfitPlannerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data["selection"]["weather"], "rainy")
+        self.assertEqual(data["selection"]["location"], "Jaipur")
+        self.assertEqual(data["selection"]["event_date"], (
+            datetime.now().date() + timedelta(days=2)
+        ).isoformat())
         self.assertEqual(data["outfit"]["weather_details"], forecast)
         self.assertEqual(
             set(data["outfit"]["item_images"]),
@@ -167,12 +171,90 @@ class OutfitPlannerTests(unittest.TestCase):
         self.assertEqual(stored["event_date"], data["selection"]["event_date"])
         self.assertEqual(stored["item_images"], data["outfit"]["item_images"])
 
+    def test_party_plan_uses_forecast_condition_to_choose_my_closet_items(self):
+        self.register()
+        for name, category, weather in (
+            ("My warm shirt", "top", "warm"),
+            ("My winter jacket", "top", "cold"),
+        ):
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "men",
+                    "weather": weather,
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        forecast = {
+            "condition": "cold",
+            "temperature_min": 7,
+            "temperature_max": 15,
+            "precipitation_probability": 10,
+            "weather_code": 3,
+            "latitude": 26.9,
+            "longitude": 75.8,
+        }
+        with patch.object(
+            outfit_app, "weather_for_event", return_value=forecast
+        ) as get_weather:
+            response = self.client.post(
+                "/api/plan",
+                json={
+                    "party_name": "शादी की पार्टी",
+                    "event_date": event_date,
+                    "location": "Jaipur",
+                    "audience": "men",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        get_weather.assert_called_once_with("Jaipur", event_date)
+        self.assertEqual(data["selection"]["weather"], "cold")
+        self.assertEqual(data["selection"]["location"], "Jaipur")
+        self.assertEqual(data["selection"]["event_date"], event_date)
+        self.assertEqual(data["outfit"]["top"], "My winter jacket")
+        self.assertEqual(data["outfit"]["weather_details"], forecast)
+
+    def test_party_plan_requires_location_and_date_for_weather_forecast(self):
+        self.register()
+        response = self.client.post(
+            "/api/plan",
+            json={
+                "party_name": "birthday",
+                "event_date": (datetime.now().date() + timedelta(days=1)).isoformat(),
+                "audience": "men",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("जगह", response.get_json()["error"])
+
     def test_weather_lookup_rejects_dates_without_a_supported_forecast(self):
         today = datetime.now().date()
+        forecast_dates = [
+            (today + timedelta(days=offset)).isoformat()
+            for offset in range(16)
+        ]
+        geocoding = [{"lat": "26.9", "lon": "75.8"}]
+        forecast = {"daily": {"time": forecast_dates}}
         with self.assertRaisesRegex(ValueError, "आज या आने वाले दिनों"):
-            outfit_app.weather_for_event("Jaipur", (today - timedelta(days=1)).isoformat())
+            with patch.object(
+                outfit_app, "fetch_map_json", side_effect=[geocoding, forecast]
+            ):
+                outfit_app.weather_for_event(
+                    "Jaipur", (today - timedelta(days=1)).isoformat()
+                )
         with self.assertRaisesRegex(ValueError, "अगले 16 दिनों"):
-            outfit_app.weather_for_event("Jaipur", (today + timedelta(days=16)).isoformat())
+            with patch.object(
+                outfit_app, "fetch_map_json", side_effect=[geocoding, forecast]
+            ):
+                outfit_app.weather_for_event(
+                    "Jaipur", (today + timedelta(days=16)).isoformat()
+                )
 
     def test_weather_lookup_uses_geocoded_coordinates_and_actual_daily_data(self):
         event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
