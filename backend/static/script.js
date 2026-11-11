@@ -80,6 +80,20 @@ const categoryNames = {
   kurti: "कुर्ती"
 };
 
+const wardrobeSearchCategoryAliases = {
+  top: ["top", "shirt", "shirts", "t-shirt", "tshirt", "blouse", "sweater", "jacket", "coat", "शर्ट", "टॉप", "कमीज़", "कमीज", "ब्लाउज़", "ब्लाउज", "स्वेटर", "जैकेट", "कोट"],
+  bottom: ["bottom", "pants", "pant", "trousers", "trouser", "jeans", "skirt", "leggings", "पैंट", "पतलून", "जींस", "जीन", "स्कर्ट", "लेगिंग"],
+  shorts: ["short", "shorts", "शॉर्ट्स"],
+  shoes: ["shoe", "shoes", "sneaker", "sneakers", "boots", "heels", "sandals", "जूते", "जूता", "जूती", "सैंडल"],
+  accessory: ["accessory", "accessories", "watch", "belt", "jewelry", "jewellery", "bag", "scarf", "घड़ी", "बेल्ट", "गहना", "बैग", "दुपट्टा", "एक्सेसरी"],
+  eyewear: ["glasses", "eyewear", "sunglasses", "चश्मा", "ऐनक"],
+  perfume: ["perfume", "cologne", "fragrance", "परफ्यूम", "इत्र"],
+  saree: ["saree", "sari", "साड़ी", "साड़ी"],
+  salwar: ["salwar", "सलवार", "सलवार-सूट"],
+  lehenga: ["lehenga", "लहंगा", "लहँगा"],
+  kurti: ["kurti", "कुर्ती"]
+};
+
 const wardrobeAudienceNames = {
   men: "पुरुष",
   women: "महिला",
@@ -579,6 +593,24 @@ function updateWardrobePhotoCount() {
     : `${count} फोटो चुनी गईं।`;
 }
 
+function wardrobeItemMatchesSearch(item, query) {
+  const queryTerms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  if (queryTerms.length === 0) return true;
+
+  const searchableText = [
+    item.name,
+    item.category,
+    categoryNames[item.category],
+    item.audience,
+    wardrobeAudienceNames[item.audience],
+    ...(wardrobeWeatherNames[item.weather] || [])
+  ].filter(Boolean).join(" ").toLocaleLowerCase();
+  const categoryAliases = wardrobeSearchCategoryAliases[item.category] || [];
+  return queryTerms.every((term) =>
+    searchableText.includes(term) || categoryAliases.includes(term)
+  );
+}
+
 wardrobeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   wardrobeMessage.textContent = "";
@@ -671,17 +703,9 @@ async function loadWardrobe() {
 
 function renderWardrobeItems() {
   const query = wardrobeSearch.value.trim().toLocaleLowerCase();
-  const matchingItems = wardrobeItemsCache.filter((item) => {
-    const searchableText = [
-      item.name,
-      item.category,
-      categoryNames[item.category],
-      item.audience,
-      wardrobeAudienceNames[item.audience],
-      ...(wardrobeWeatherNames[item.weather] || [])
-    ].filter(Boolean).join(" ").toLocaleLowerCase();
-    return !query || searchableText.includes(query);
-  });
+  const matchingItems = wardrobeItemsCache.filter((item) =>
+    wardrobeItemMatchesSearch(item, query)
+  );
 
   wardrobeList.replaceChildren(
     ...matchingItems.map((item) => createWardrobeCard(item))
