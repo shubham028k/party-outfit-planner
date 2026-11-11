@@ -628,6 +628,10 @@ select:focus,
   margin: 0;
 }
 
+#saveWardrobeButton {
+  margin-top: 8px;
+}
+
 .secondary-button {
   justify-content: center;
   gap: 9px;

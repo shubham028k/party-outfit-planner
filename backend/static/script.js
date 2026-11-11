@@ -2,6 +2,8 @@ const form = document.getElementById("outfitForm");
 const errorMessage = document.getElementById("errorMessage");
 const saveMessage = document.getElementById("saveMessage");
 const saveButton = document.getElementById("saveButton");
+const saveWardrobeButton = document.getElementById("saveWardrobeButton");
+const saveWardrobeMessage = document.getElementById("saveWardrobeMessage");
 const resultPlaceholder = document.getElementById("resultPlaceholder");
 const outfitResult = document.getElementById("outfitResult");
 const partySearchInput = document.getElementById("partySearch");
@@ -77,6 +79,7 @@ function invalidateCurrentLook() {
   if (!currentSelection) return;
   currentSelection = null;
   saveButton.disabled = true;
+  saveWardrobeButton.disabled = true;
   saveMessage.textContent = translateText("तुमने जानकारी बदली है; लुक फिर से बनाओ।");
 }
 
@@ -392,6 +395,7 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorMessage.textContent = "";
   saveMessage.textContent = "";
+  saveWardrobeMessage.textContent = "";
 
   const selection = {
     party_name: partySearchInput.value.trim(),
@@ -402,6 +406,7 @@ form.addEventListener("submit", async (event) => {
   currentSelection = null;
   currentOutfit = null;
   saveButton.disabled = true;
+  saveWardrobeButton.disabled = true;
 
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
@@ -422,6 +427,7 @@ form.addEventListener("submit", async (event) => {
 
     currentSelection = data.selection;
     saveButton.disabled = false;
+    saveWardrobeButton.disabled = false;
     showOutfit(data.outfit);
   } catch (error) {
     errorMessage.textContent = translateText(error.message);
@@ -589,6 +595,42 @@ saveButton.addEventListener("click", async () => {
     saveMessage.textContent = translateText(error.message);
   } finally {
     saveButton.disabled = false;
+  }
+});
+
+saveWardrobeButton.addEventListener("click", async () => {
+  if (!currentSelection || !currentOutfit) {
+    saveWardrobeMessage.textContent = translateText("पहले अपना लुक बनाओ।");
+    return;
+  }
+  saveWardrobeButton.disabled = true;
+  saveWardrobeMessage.textContent = appLanguage === "en"
+    ? "Adding items to My Closet…"
+    : "कपड़े अलमारी में जोड़े जा रहे हैं…";
+  try {
+    const response = await fetch("/api/wardrobe/from-outfit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selection: currentSelection, outfit: currentOutfit })
+    });
+    const data = await readJsonResponse(response);
+    if (!response.ok) throw new Error(data.error || "कपड़े अलमारी में नहीं जुड़ पाए।");
+    const added = Number(data.added) || 0;
+    const skipped = Number(data.skipped) || 0;
+    if (appLanguage === "en") {
+      saveWardrobeMessage.textContent = added
+        ? `Added ${added} item${added === 1 ? "" : "s"} to My Closet${skipped ? ` · ${skipped} already there` : ""}.`
+        : "These items are already in My Closet.";
+    } else {
+      saveWardrobeMessage.textContent = added
+        ? `${added} चीज़ें अलमारी में जोड़ दी गईं${skipped ? ` · ${skipped} पहले से थीं` : ""}।`
+        : "ये चीज़ें पहले से अलमारी में हैं।";
+    }
+    await loadWardrobe();
+  } catch (error) {
+    saveWardrobeMessage.textContent = translateText(error.message);
+  } finally {
+    saveWardrobeButton.disabled = false;
   }
 });
 
@@ -1447,6 +1489,8 @@ function applyPageLanguage() {
   setEnglish("#colorIdeasTitle", "Clothing and shoe color combinations");
   setEnglish("#saveButton span", "Save this look");
   setEnglish("#saveHint", "Create a look first; then you can save it.", false, "पहले लुक बनाओ; फिर इसे सेव कर पाओगे।");
+  setEnglish("#saveWardrobeButton span", "Add these items to My Closet");
+  setEnglish("#saveWardrobeHint", "After creating a look, add its suggested clothes and shoes to your wardrobe.");
   document.querySelectorAll(".outfit-item small").forEach((item, index) => {
     const labels = ["Top", "Bottom", "Shoes", "Accessory", "Glasses"];
     const original = ["ऊपर", "नीचे", "जूते", "एक्सेसरी", "चश्मा"];

@@ -2407,6 +2407,89 @@ def add_wardrobe_item():
     }), 201
 
 
+@app.post("/api/wardrobe/from-outfit")
+@login_required
+def save_outfit_items_to_wardrobe():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "लुक की जानकारी सही नहीं है।"}), 400
+    selection = data.get("selection")
+    outfit = data.get("outfit")
+    if not isinstance(selection, dict) or not isinstance(outfit, dict):
+        return jsonify({"error": "लुक की जानकारी सही नहीं है।"}), 400
+    audience = selection.get("audience")
+    weather = selection.get("weather", "any")
+    if (
+        not isinstance(audience, str)
+        or audience not in WARDROBE_AUDIENCES
+        or not isinstance(weather, str)
+        or weather not in WARDROBE_WEATHER
+    ):
+        return jsonify({"error": "अलमारी के विकल्प सही नहीं हैं।"}), 400
+
+    items = []
+    skipped = 0
+    field_categories = {
+        "top": "top", "bottom": "bottom", "shoes": "shoes",
+        "accessory": "accessory", "eyewear": "eyewear", "perfume": "perfume"
+    }
+    for field, default_category in field_categories.items():
+        name = outfit.get(field)
+        if name is None:
+            continue
+        if not isinstance(name, str) or len(name.strip()) > 300:
+            return jsonify({"error": "लुक में कपड़ों की जानकारी सही नहीं है।"}), 400
+        name = name.strip()
+        if not name:
+            continue
+        if field == "eyewear" and name == eyewear_suggestion(audience):
+            continue
+        if field == "perfume" and name == perfume_suggestion(audience):
+            continue
+        category = default_category
+        if field == "bottom":
+            inferred_category = infer_wardrobe_category(name)
+            if inferred_category in {"shorts", "saree", "salwar", "lehenga", "kurti"}:
+                category = inferred_category
+        if len(name) > 60:
+            skipped += 1
+            continue
+        items.append((name, category))
+
+    if not items:
+        return jsonify({"added": 0, "skipped": skipped})
+    audience_options = (*wardrobe_audience_options(audience), "all")
+    audience_placeholders = ", ".join("?" for _ in audience_options)
+    added = 0
+    seen = set()
+    with connect_db() as connection:
+        for name, category in items:
+            dedupe_key = (name.casefold(), category)
+            if dedupe_key in seen:
+                skipped += 1
+                continue
+            seen.add(dedupe_key)
+            existing = connection.execute(
+                f"""SELECT name FROM wardrobe_items
+                    WHERE user_id = ? AND category = ?
+                      AND audience IN ({audience_placeholders})""",
+                (session["user_id"], category, *audience_options)
+            ).fetchall()
+            if any(row["name"].strip().casefold() == name.casefold() for row in existing):
+                skipped += 1
+                continue
+            connection.execute(
+                """INSERT INTO wardrobe_items
+                   (name, category, created_at, user_id, audience, weather,
+                    image_data, image_mime)
+                   VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)""",
+                (name, category, datetime.now().isoformat(timespec="seconds"),
+                 session["user_id"], audience, weather)
+            )
+            added += 1
+    return jsonify({"added": added, "skipped": skipped}), 201
+
+
 @app.delete("/api/wardrobe/<int:item_id>")
 @login_required
 def delete_wardrobe_item(item_id):
