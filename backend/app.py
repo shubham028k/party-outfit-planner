@@ -2110,18 +2110,22 @@ def plan_party_outfit():
     location = data.get("location")
     event_date = data.get("event_date")
     uses_forecast = location is not None or event_date is not None
-    audience = data.get("audience")
+    person_name = data.get("person_name", "")
+    audience = data.get("audience", "men")
     language = data.get("language", "hi")
 
     if (
         party not in PARTY_NAMES
+        or not isinstance(person_name, str)
+        or len(person_name.strip()) > 60
+        or ("person_name" in data and not person_name.strip())
         or not isinstance(audience, str)
         or audience not in AUDIENCE_NAMES
         or not isinstance(language, str)
         or language not in {"hi", "en"}
     ):
         return jsonify({
-            "error": "पार्टी का नाम, मौसम और किसके लिए लुक है—ये जानकारी जाँचें।"
+            "error": "पार्टी का नाम, मौसम और लुक के लिए नाम जाँचें।"
         }), 400
 
     if uses_forecast and (
@@ -2155,7 +2159,7 @@ def plan_party_outfit():
         )
     if weather not in {"warm", "cold", "rainy"}:
         return jsonify({
-            "error": "पार्टी का नाम, मौसम और किसके लिए लुक है—ये जानकारी जाँचें।"
+            "error": "पार्टी का नाम, मौसम और लुक के लिए नाम जाँचें।"
         }), 400
 
     style = {
@@ -2211,6 +2215,7 @@ def plan_party_outfit():
         )
     outfit.update({
         "location": location.strip() if uses_forecast else "",
+        "person_name": person_name.strip(),
         "weather_details": weather_details or {"condition": weather}
     })
     if uses_forecast:
@@ -2222,6 +2227,7 @@ def plan_party_outfit():
             "weather": weather,
             "style": style,
             "audience": audience,
+            "person_name": person_name.strip(),
             "bottom_preference": "trousers",
             "outfit_type": "any",
             "location": location.strip() if uses_forecast else "",
@@ -2394,6 +2400,7 @@ def save_outfit():
     weather = data.get("weather")
     style = data.get("style")
     audience = data.get("audience")
+    person_name = data.get("person_name", "")
     bottom_preference = data.get("bottom_preference", "trousers")
     location = data.get("location", "")
     outfit_type = data.get("outfit_type", "any")
@@ -2404,6 +2411,8 @@ def save_outfit():
         or weather not in {"warm", "cold", "rainy"}
         or style not in STYLE_NAMES
         or audience not in AUDIENCE_NAMES
+        or not isinstance(person_name, str)
+        or len(person_name.strip()) > 60
         or bottom_preference not in BOTTOM_NAMES
         or not isinstance(location, str)
         or len(location) > 100
@@ -2500,6 +2509,8 @@ def save_outfit():
             )
         if safe_images:
             outfit["item_images"] = safe_images
+        if person_name.strip():
+            outfit["person_name"] = person_name.strip()
         outfit.update({
             "party_name": PARTY_NAMES[party],
             "style_name": STYLE_NAMES[style],
@@ -2512,6 +2523,8 @@ def save_outfit():
             bottom_preference, outfit_type
         )
         outfit["location"] = location.strip()
+        if person_name.strip():
+            outfit["person_name"] = person_name.strip()
 
     with connect_db() as connection:
         cursor = connection.execute(

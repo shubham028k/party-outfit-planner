@@ -62,13 +62,10 @@
                    placeholder="शहर या राज्य, जैसे जयपुर, राजस्थान या कश्मीर" required>
             <small class="planner-hint">शहर या राज्य और तारीख भरो—मौसम देखकर उसी के हिसाब से कपड़े सुझेंगे। राज्य का मौसम अनुमानित होगा।</small>
 
-            <label for="audience">लुक किसके लिए है?</label>
-            <select id="audience" name="audience" required>
-              <option value="men">पुरुष</option>
-              <option value="women">महिला</option>
-              <option value="children">बच्चे</option>
-              <option value="senior">बुज़ुर्ग</option>
-            </select>
+            <label for="personName">किसके नाम से लुक बनाना है?</label>
+            <input id="personName" class="planner-input" name="person_name"
+                   type="text" maxlength="60" autocomplete="name"
+                   placeholder="नाम लिखें" required>
             <p id="plannerHint" class="planner-hint">चुनी तारीख और जगह का मौसम देखकर अलमारी से कपड़े अपने आप चुने जाएँगे।</p>
             <button class="primary-button" type="submit">
               <span>मेरी अलमारी से लुक सुझाओ</span><span aria-hidden="true">↗</span>

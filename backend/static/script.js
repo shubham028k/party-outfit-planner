@@ -7,6 +7,7 @@ const outfitResult = document.getElementById("outfitResult");
 const partySearchInput = document.getElementById("partySearch");
 const eventDateInput = document.getElementById("eventDate");
 const eventLocationInput = document.getElementById("eventLocation");
+const personNameInput = document.getElementById("personName");
 const wardrobeSearch = document.getElementById("wardrobeSearch");
 const wardrobeSearchEmpty = document.getElementById("wardrobeSearchEmpty");
 let wardrobeItemsCache = [];
@@ -343,7 +344,7 @@ form.addEventListener("submit", async (event) => {
     party_name: partySearchInput.value.trim(),
     event_date: eventDateInput.value,
     location: eventLocationInput.value.trim(),
-    audience: document.getElementById("audience").value,
+    person_name: personNameInput.value.trim(),
     language: appLanguage
   };
   currentSelection = null;
@@ -387,7 +388,7 @@ function showOutfit(outfit) {
   );
   document.getElementById("partyName").textContent = outfit.party_name;
   document.getElementById("styleName").textContent =
-    `${outfit.audience_name} · ${outfit.style_name} स्टाइल`;
+    `${currentSelection?.person_name || outfit.audience_name} · ${outfit.style_name} स्टाइल`;
   document.getElementById("outfitTop").textContent = outfit.top;
   document.getElementById("outfitBottom").textContent = outfit.bottom;
   document.getElementById("outfitShoes").textContent = outfit.shoes;
@@ -1203,9 +1204,9 @@ const englishText = {
   "मौसम सेवा ने इस तारीख का अनुमान नहीं दिया।": "The weather service has no forecast for this date.",
   "मौसम सेवा ने अधूरा अनुमान दिया।": "The weather service returned an incomplete forecast.",
   "इस जगह का मौसम अभी नहीं मिल पाया। जगह जाँचें और फिर कोशिश करें।": "The weather for this location could not be retrieved. Check the location and try again.",
-  "पार्टी, तारीख, जगह और किसके लिए लुक है—ये जानकारी भरें।": "Enter the occasion, date, location, and who the look is for.",
+  "पार्टी, तारीख, जगह और लुक के लिए नाम भरें।": "Enter the occasion, date, location, and name for the look.",
   "पार्टी की जानकारी सही नहीं है।": "The party details are invalid.",
-  "पार्टी का नाम, मौसम और किसके लिए लुक है—ये जानकारी जाँचें।": "Check the party name, weather, and who the look is for.",
+  "पार्टी का नाम, मौसम और लुक के लिए नाम जाँचें।": "Check the party name, weather, and name for the look.",
   "कपड़े के लिए सही मौसम चुनें।": "Choose a valid weather condition for this item.",
   "Map की जानकारी सही नहीं है।": "The map details are invalid.",
   "Map के लिए जगह और current location जाँचें।": "Check the venue and current location for the map.",
@@ -1366,18 +1367,15 @@ function applyPageLanguage() {
   setEnglish("#partySearch", "e.g. wedding, birthday, or night party");
   setEnglish('label[for="eventDate"]', "When are you going?");
   setEnglish('label[for="eventLocation"]', "Where are you going?");
+  setEnglish('label[for="personName"]', "Whose name should be on the look?");
+  setEnglish("#personName", "Enter a name");
   setEnglish("#eventLocation", "City or region, e.g. Jaipur, Rajasthan, or Kashmir");
   setEnglish(".form-panel form > .planner-hint", "Enter a city or region and date. We’ll check the weather and match clothes to it; state-level weather is approximate.");
-  setEnglish('label[for="audience"]', "Who is the look for?");
   setDatalistOptions(
     "partySuggestions",
     ["शादी की पार्टी", "बर्थडे पार्टी", "कैज़ुअल पार्टी", "नाइट पार्टी"],
     ["Wedding party", "Birthday party", "Casual party", "Night party"]
   );
-  setOption('#audience option[value="men"]', "Men");
-  setOption('#audience option[value="women"]', "Women");
-  setOption('#audience option[value="children"]', "Children");
-  setOption('#audience option[value="senior"]', "Older adult");
   setEnglish(".form-panel .primary-button span:first-child", "Suggest a look from my wardrobe");
 
   setEnglish(".result-panel .eyebrow", "MADE FOR YOUR PLAN", false, "तुम्हारे प्लान के लिए");
@@ -1582,8 +1580,8 @@ function renderLocalizedOutfit(outfit) {
   originalShowOutfit(outfit);
   document.getElementById("partyName").textContent = outfit.party_name;
   document.getElementById("styleName").textContent = appLanguage === "en"
-    ? `${outfit.audience_name} · ${outfit.style_name} style`
-    : `${outfit.audience_name} · ${outfit.style_name} स्टाइल`;
+    ? `${currentSelection?.person_name || outfit.audience_name} · ${outfit.style_name} style`
+    : `${currentSelection?.person_name || outfit.audience_name} · ${outfit.style_name} स्टाइल`;
   document.getElementById("outfitTop").textContent = outfit.top;
   document.getElementById("outfitBottom").textContent = outfit.bottom;
   document.getElementById("outfitShoes").textContent = outfit.shoes;

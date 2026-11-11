@@ -432,7 +432,7 @@ class OutfitPlannerTests(unittest.TestCase):
                     "party_name": "birthday",
                     "event_date": event_date,
                     "location": "Srinagar",
-                    "audience": "men",
+                    "person_name": "Aarav",
                 },
             )
 
@@ -442,7 +442,17 @@ class OutfitPlannerTests(unittest.TestCase):
             data["outfit"]["weather_details"]["source"],
             "historical_monthly_normal"
         )
+        self.assertEqual(data["outfit"]["person_name"], "Aarav")
+        self.assertEqual(data["selection"]["person_name"], "Aarav")
+        self.assertEqual(data["selection"]["audience"], "men")
         self.assertIn("थर्मल/ऊनी इनर", data["outfit"]["weather_outfit"])
+        saved = self.client.post(
+            "/api/outfits",
+            json={**data["selection"], "outfit": data["outfit"]},
+        )
+        self.assertEqual(saved.status_code, 201)
+        saved_outfits = self.client.get("/api/outfits").get_json()["outfits"]
+        self.assertEqual(saved_outfits[0]["outfit"]["person_name"], "Aarav")
 
     def test_weather_lookup_uses_secondary_geocoder_when_primary_fails(self):
         event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
