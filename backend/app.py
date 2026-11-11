@@ -949,7 +949,7 @@ def auto_plan_for_event(user_id, event):
     }
 
 
-def fetch_map_json(url):
+def fetch_map_json(url, timeout=12):
     external_request = Request(
         url,
         headers={
@@ -958,7 +958,7 @@ def fetch_map_json(url):
         }
     )
     try:
-        with urlopen(external_request, timeout=12) as response:
+        with urlopen(external_request, timeout=timeout) as response:
             body = response.read(2 * 1024 * 1024 + 1)
     except HTTPError as error:
         raise RuntimeError(
@@ -1006,6 +1006,72 @@ def route_to_event(location, origin_latitude, origin_longitude):
     }
 
 
+def climate_weather_for_event(latitude, longitude, requested_date):
+    if requested_date > datetime.strptime("2050-01-01", "%Y-%m-%d").date():
+        raise ValueError(
+            "इस तारीख के लिए मौसमी जानकारी उपलब्ध नहीं है। 2050 या उससे पहले की तारीख चुनें।"
+        )
+
+    climate_url = (
+        "https://climate-api.open-meteo.com/v1/climate?"
+        + urlencode({
+            "latitude": latitude,
+            "longitude": longitude,
+            "start_date": requested_date.isoformat(),
+            "end_date": requested_date.isoformat(),
+            "models": "MRI_AGCM3_2_S",
+            "daily": (
+                "temperature_2m_max,temperature_2m_min,"
+                "precipitation_sum,snowfall_sum"
+            )
+        })
+    )
+    climate = fetch_map_json(climate_url, timeout=8)
+    if not isinstance(climate, dict):
+        raise RuntimeError("Climate service returned invalid data.")
+    daily = climate.get("daily", {})
+    if not isinstance(daily, dict):
+        raise RuntimeError("Climate service returned invalid daily data.")
+    dates = daily.get("time", [])
+    if not isinstance(dates, list) or requested_date.isoformat() not in dates:
+        raise RuntimeError("Climate service has no estimate for this date.")
+
+    index = dates.index(requested_date.isoformat())
+    try:
+        maximum = float(daily["temperature_2m_max"][index])
+        minimum = float(daily["temperature_2m_min"][index])
+        precipitation = float(daily["precipitation_sum"][index])
+        snowfall = float(daily["snowfall_sum"][index])
+    except (IndexError, KeyError, TypeError, ValueError) as error:
+        raise RuntimeError("Climate service returned incomplete data.") from error
+    if (
+        not all(math.isfinite(value) for value in (maximum, minimum, precipitation, snowfall))
+        or maximum < minimum
+        or precipitation < 0
+        or snowfall < 0
+    ):
+        raise RuntimeError("Climate service returned invalid weather values.")
+
+    if minimum <= 12 or (minimum + maximum) / 2 <= 17 or snowfall >= 0.2:
+        condition = "cold"
+    elif precipitation >= 2.5:
+        condition = "rainy"
+    else:
+        condition = "warm"
+
+    return {
+        "condition": condition,
+        "temperature_min": minimum,
+        "temperature_max": maximum,
+        "precipitation_sum": precipitation,
+        "snowfall_sum": snowfall,
+        "latitude": latitude,
+        "longitude": longitude,
+        "is_estimate": True,
+        "source": "climate_estimate"
+    }
+
+
 def weather_for_event(location, event_date):
     try:
         requested_date = datetime.strptime(event_date, "%Y-%m-%d").date()
@@ -1013,17 +1079,20 @@ def weather_for_event(location, event_date):
         raise ValueError("कार्यक्रम की सही तारीख चुनें।") from error
 
     geocode_url = (
-        "https://nominatim.openstreetmap.org/search?"
-        + urlencode({"q": location, "format": "jsonv2", "limit": 1})
+        "https://geocoding-api.open-meteo.com/v1/search?"
+        + urlencode({"name": location, "count": 1, "language": "en", "format": "json"})
     )
-    places = fetch_map_json(geocode_url)
-    if not isinstance(places, list):
+    places = fetch_map_json(geocode_url, timeout=8)
+    if not isinstance(places, dict):
         raise RuntimeError("Location service returned invalid data.")
-    if not places:
+    results = places.get("results", [])
+    if not isinstance(results, list):
+        raise RuntimeError("Location service returned invalid results.")
+    if not results:
         raise ValueError("यह शहर या venue map पर नहीं मिला।")
     try:
-        latitude = float(places[0]["lat"])
-        longitude = float(places[0]["lon"])
+        latitude = float(results[0]["latitude"])
+        longitude = float(results[0]["longitude"])
     except (KeyError, TypeError, ValueError) as error:
         raise RuntimeError("Location service ने गलत coordinates दिए।") from error
     if (
@@ -1047,7 +1116,7 @@ def weather_for_event(location, event_date):
             "forecast_days": 16
         })
     )
-    forecast = fetch_map_json(forecast_url)
+    forecast = fetch_map_json(forecast_url, timeout=8)
     if not isinstance(forecast, dict):
         raise RuntimeError("मौसम सेवा ने गलत forecast data दिया।")
     daily = forecast.get("daily", {})
@@ -1065,9 +1134,7 @@ def weather_for_event(location, event_date):
         if requested_date < forecast_start:
             raise ValueError("कार्यक्रम की तारीख आज या आने वाले दिनों में होनी चाहिए।")
         if requested_date > forecast_end:
-            raise ValueError(
-                "अभी मौसम का अनुमान अगले 16 दिनों तक उपलब्ध है। पास की तारीख चुनें।"
-            )
+            return climate_weather_for_event(latitude, longitude, requested_date)
         raise RuntimeError("मौसम सेवा ने इस तारीख का अनुमान नहीं दिया।")
     index = dates.index(requested_date.isoformat())
     try:
@@ -1085,8 +1152,11 @@ def weather_for_event(location, event_date):
     ):
         raise RuntimeError("मौसम सेवा ने अधूरा अनुमान दिया।")
 
+    snowy_codes = {71, 73, 75, 77, 85, 86}
     rainy_codes = {51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99}
-    if weather_code in rainy_codes or precipitation >= 50:
+    if weather_code in snowy_codes:
+        condition = "cold"
+    elif weather_code in rainy_codes or precipitation >= 50:
         condition = "rainy"
     elif minimum <= 12 or (minimum + maximum) / 2 <= 17:
         condition = "cold"
@@ -1100,7 +1170,9 @@ def weather_for_event(location, event_date):
         "precipitation_probability": precipitation,
         "weather_code": weather_code,
         "latitude": latitude,
-        "longitude": longitude
+        "longitude": longitude,
+        "is_estimate": False,
+        "source": "forecast"
     }
 
 
@@ -1862,6 +1934,16 @@ def plan_party_outfit():
     outfit = make_recommendation(
         session["user_id"], party, weather, style, audience
     )
+    if (
+        weather_details
+        and (
+            weather_details.get("snowfall_sum", 0) >= 0.2
+            or weather_details.get("weather_code") in {71, 73, 75, 77, 85, 86}
+        )
+    ):
+        outfit["weather_tip"] = (
+            "बर्फ़ की संभावना है—गर्म परतें, ऊनी मोज़े और ग्रिप वाले वाटरप्रूफ जूते रखें।"
+        )
     outfit.update({
         "location": location.strip() if uses_forecast else "",
         "weather_details": weather_details or {"condition": weather}

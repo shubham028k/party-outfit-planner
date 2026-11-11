@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#17152b">
   <title>पार्टी आउटफिट प्लानर · LOOKBOOK</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261111-3">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261111-4">
 </head>
 <body>
   <div class="page-shell">
@@ -31,6 +31,102 @@
     </header>
 
     <main>
+      <section class="planner-grid">
+        <section class="panel form-panel" aria-labelledby="plannerTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">YOUR NEXT EVENT</p>
+              <h2 id="plannerTitle">अपनी पार्टी बताओ</h2>
+            </div>
+            <span class="step-badge">01</span>
+          </div>
+          <form id="outfitForm">
+            <label for="partySearch">पार्टी का नाम खोजें</label>
+            <input id="partySearch" class="planner-input" name="party_name"
+                   list="partySuggestions" maxlength="60" autocomplete="off"
+                   placeholder="जैसे: शादी, जन्मदिन या नाइट पार्टी" required>
+            <datalist id="partySuggestions">
+              <option value="शादी की पार्टी"></option>
+              <option value="बर्थडे पार्टी"></option>
+              <option value="कैज़ुअल पार्टी"></option>
+              <option value="नाइट पार्टी"></option>
+            </datalist>
+
+            <label for="eventDate">कब जाना है?</label>
+            <input id="eventDate" class="planner-input" name="event_date"
+                   type="date" required>
+
+            <label for="eventLocation">कहाँ जाना है?</label>
+            <input id="eventLocation" class="planner-input" name="location"
+                   type="text" maxlength="100" autocomplete="street-address"
+                   placeholder="जाने की जगह, जैसे श्रीनगर या गुलमर्ग" required>
+            <small class="planner-hint">जगह और तारीख भरो—मौसम अपने आप देखकर कपड़े सुझेंगे। 16 दिन बाद मौसमी अनुमान मिलेगा।</small>
+
+            <label for="audience">लुक किसके लिए है?</label>
+            <select id="audience" name="audience" required>
+              <option value="men">पुरुष</option>
+              <option value="women">महिला</option>
+              <option value="children">बच्चे</option>
+              <option value="senior">बुज़ुर्ग</option>
+            </select>
+            <p id="plannerHint" class="planner-hint">चुनी तारीख और जगह का मौसम देखकर अलमारी से कपड़े अपने आप चुने जाएँगे।</p>
+            <button class="primary-button" type="submit">
+              <span>मेरी अलमारी से लुक सुझाओ</span><span aria-hidden="true">↗</span>
+            </button>
+            <p id="errorMessage" class="error-message" role="alert"></p>
+          </form>
+        </section>
+
+        <div class="panel result-panel" id="resultPanel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">MADE FOR YOUR PLAN</p>
+              <h2>तुम्हारा लुक</h2>
+            </div>
+            <span class="step-badge">02</span>
+          </div>
+
+          <div id="resultPlaceholder" class="result-placeholder">
+            <span class="placeholder-icon">✧</span>
+            <p>अपनी पार्टी की जानकारी भरो।<br>तुम्हारा लुक यहाँ दिखाई देगा।</p>
+          </div>
+
+          <div id="outfitResult" class="outfit-result" hidden>
+            <div class="look-label">
+              <span id="partyName"></span>
+              <span id="styleName"></span>
+            </div>
+            <p id="lookWeather" class="look-weather"></p>
+            <div class="outfit-items">
+              <div class="outfit-item"><span class="outfit-visual">👕<img id="outfitTopImage" alt="" hidden></span><div><small>ऊपर</small><strong id="outfitTop"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">👖<img id="outfitBottomImage" alt="" hidden></span><div><small>नीचे</small><strong id="outfitBottom"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">👟<img id="outfitShoesImage" alt="" hidden></span><div><small>जूते</small><strong id="outfitShoes"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">⌚<img id="outfitAccessoryImage" alt="" hidden></span><div><small>एक्सेसरी</small><strong id="outfitAccessory"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">👓<img id="outfitEyewearImage" alt="" hidden></span><div><small>चश्मा</small><strong id="outfitEyewear"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">🧴<img id="outfitPerfumeImage" alt="" hidden></span><div><small>परफ्यूम</small><strong id="outfitPerfume"></strong></div></div>
+            </div>
+            <p id="outfitLanguageStatus" class="outfit-language-status" aria-live="polite" hidden></p>
+            <section id="designIdea" class="design-idea" aria-labelledby="designIdeaTitle" hidden>
+              <div id="designVisual" class="design-visual"></div>
+              <div class="design-copy">
+                <p class="eyebrow">DESIGN INSPIRATION</p>
+                <h3 id="designIdeaTitle"></h3>
+                <p id="designDetails"></p>
+              </div>
+            </section>
+            <div class="weather-tip"><span>✦</span><p id="weatherTip"></p></div>
+            <section class="color-ideas" aria-labelledby="colorIdeasTitle">
+              <h3 id="colorIdeasTitle">कपड़ों और जूतों के रंगों के मेल</h3>
+              <div id="colorCombinationList" class="color-combination-list"></div>
+            </section>
+            <button id="saveButton" class="secondary-button" type="button">
+              ♡ <span>इस लुक को सेव करो</span>
+            </button>
+            <p id="saveMessage" class="save-message" aria-live="polite"></p>
+          </div>
+        </div>
+      </section>
+
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">YOUR PLAN, YOUR STYLE</p>
@@ -150,104 +246,6 @@
         </p>
       </section>
 
-      <section class="planner-grid">
-        <section class="panel form-panel" aria-labelledby="plannerTitle">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">YOUR NEXT EVENT</p>
-              <h2 id="plannerTitle">अपनी पार्टी बताओ</h2>
-            </div>
-            <span class="step-badge">01</span>
-          </div>
-          <form id="outfitForm">
-            <label for="partySearch">पार्टी का नाम खोजें</label>
-            <input id="partySearch" class="planner-input" name="party_name"
-                   list="partySuggestions" maxlength="60" autocomplete="off"
-                   placeholder="जैसे: शादी, जन्मदिन या नाइट पार्टी" required>
-            <datalist id="partySuggestions">
-              <option value="शादी की पार्टी"></option>
-              <option value="बर्थडे पार्टी"></option>
-              <option value="कैज़ुअल पार्टी"></option>
-              <option value="नाइट पार्टी"></option>
-            </datalist>
-
-            <label for="eventDate">कब जाना है?</label>
-            <input id="eventDate" class="planner-input" name="event_date"
-                   type="date" required>
-
-            <label for="eventLocation">कहाँ जाना है?</label>
-            <input id="eventLocation" class="planner-input" name="location"
-                   type="text" maxlength="100" autocomplete="street-address"
-                   placeholder="शहर या जगह, जैसे जयपुर" required>
-            <small class="planner-hint">अगले 16 दिनों का मौसम देखकर अलमारी से कपड़े चुनेंगे।</small>
-
-            <label for="audience">लुक किसके लिए है?</label>
-            <select id="audience" name="audience" required>
-              <option value="men">पुरुष</option>
-              <option value="women">महिला</option>
-              <option value="children">बच्चे</option>
-              <option value="senior">बुज़ुर्ग</option>
-            </select>
-            <p id="plannerHint" class="planner-hint">चुनी तारीख और जगह का मौसम देखकर अलमारी से कपड़े अपने आप चुने जाएँगे।</p>
-            <button class="primary-button" type="submit">
-              <span>मेरी अलमारी से लुक सुझाओ</span><span aria-hidden="true">↗</span>
-            </button>
-            <p id="errorMessage" class="error-message" role="alert"></p>
-          </form>
-        </section>
-
-        <div class="panel result-panel" id="resultPanel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">MADE FOR YOUR PLAN</p>
-              <h2>तुम्हारा लुक</h2>
-            </div>
-            <span class="step-badge">02</span>
-          </div>
-
-          <div id="resultPlaceholder" class="result-placeholder">
-            <span class="placeholder-icon">✧</span>
-            <p>अपनी पार्टी की जानकारी भरो।<br>तुम्हारा लुक यहाँ दिखाई देगा।</p>
-          </div>
-
-          <div id="outfitResult" class="outfit-result" hidden>
-            <div class="look-label">
-              <span id="partyName"></span>
-              <span id="styleName"></span>
-            </div>
-            <p id="lookWeather" class="look-weather"></p>
-            <div class="outfit-items">
-              <div class="outfit-item"><span class="outfit-visual">👕<img id="outfitTopImage" alt="" hidden></span><div><small>ऊपर</small><strong id="outfitTop"></strong></div></div>
-              <div class="outfit-item"><span class="outfit-visual">👖<img id="outfitBottomImage" alt="" hidden></span><div><small>नीचे</small><strong id="outfitBottom"></strong></div></div>
-              <div class="outfit-item"><span class="outfit-visual">👟<img id="outfitShoesImage" alt="" hidden></span><div><small>जूते</small><strong id="outfitShoes"></strong></div></div>
-              <div class="outfit-item"><span class="outfit-visual">⌚<img id="outfitAccessoryImage" alt="" hidden></span><div><small>एक्सेसरी</small><strong id="outfitAccessory"></strong></div></div>
-              <div class="outfit-item"><span class="outfit-visual">👓<img id="outfitEyewearImage" alt="" hidden></span><div><small>चश्मा</small><strong id="outfitEyewear"></strong></div></div>
-              <div class="outfit-item"><span class="outfit-visual">🧴<img id="outfitPerfumeImage" alt="" hidden></span><div><small>परफ्यूम</small><strong id="outfitPerfume"></strong></div></div>
-            </div>
-            <p id="outfitLanguageStatus" class="outfit-language-status" aria-live="polite" hidden></p>
-            <section id="designIdea" class="design-idea" aria-labelledby="designIdeaTitle" hidden>
-              <div id="designVisual" class="design-visual"></div>
-              <div class="design-copy">
-                <p class="eyebrow">DESIGN INSPIRATION</p>
-                <h3 id="designIdeaTitle"></h3>
-                <p id="designDetails"></p>
-              </div>
-            </section>
-            <div class="weather-tip"><span>✦</span><p id="weatherTip"></p></div>
-            <section class="color-ideas" aria-labelledby="colorIdeasTitle">
-              <h3 id="colorIdeasTitle">कपड़ों और जूतों के रंगों के मेल</h3>
-              <div id="colorCombinationList" class="color-combination-list"></div>
-            </section>
-            <button id="saveButton" class="secondary-button" type="button">
-              ♡ <span>इस लुक को सेव करो</span>
-            </button>
-            <p id="saveMessage" class="save-message" aria-live="polite"></p>
-          </div>
-        </div>
-      </section>
-
-
-
       <section class="saved-section">
         <div class="saved-heading">
           <div>
@@ -269,6 +267,6 @@
     </footer>
   </div>
 
-  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-4"></script>
+  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-6"></script>
 </body>
 </html>

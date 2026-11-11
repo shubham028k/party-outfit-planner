@@ -475,6 +475,16 @@ function renderLookWeather(weather, details, location, eventDate) {
       ? ` · ${Math.round(details.precipitation_probability)}% rain chance`
       : ` · बारिश की संभावना ${Math.round(details.precipitation_probability)}%`
     : "";
+  const climateRain = details && Number.isFinite(details.precipitation_sum)
+    ? appLanguage === "en"
+      ? ` · estimated precipitation ${details.precipitation_sum.toFixed(1)} mm`
+      : ` · अनुमानित वर्षा ${details.precipitation_sum.toFixed(1)} मिमी`
+    : "";
+  const snow = details && Number.isFinite(details.snowfall_sum) && details.snowfall_sum > 0
+    ? appLanguage === "en"
+      ? ` · possible snow ${details.snowfall_sum.toFixed(1)} cm`
+      : ` · संभावित बर्फ़ ${details.snowfall_sum.toFixed(1)} सेमी`
+    : "";
   const date = eventDate
     ? ` · ${new Intl.DateTimeFormat(
       appLanguage === "en" ? "en" : "hi",
@@ -482,9 +492,10 @@ function renderLookWeather(weather, details, location, eventDate) {
     ).format(new Date(`${eventDate}T00:00:00`))}`
     : "";
   const place = location ? ` · ${location}` : "";
+  const isEstimate = details?.is_estimate === true;
   element.textContent = appLanguage === "en"
-    ? `Weather: ${label}${temperature}${rainChance}${place}${date}`
-    : `मौसम: ${label}${temperature}${rainChance}${place}${date}`;
+    ? `${isEstimate ? "Climate estimate (not a forecast; CMIP6 / Open-Meteo)" : "Weather"}: ${label}${temperature}${isEstimate ? climateRain : rainChance}${snow}${place}${date}`
+    : `${isEstimate ? "जलवायु अनुमान (वास्तविक पूर्वानुमान नहीं; CMIP6 / Open-Meteo)" : "मौसम"}: ${label}${temperature}${isEstimate ? climateRain : rainChance}${snow}${place}${date}`;
 }
 
 saveButton.addEventListener("click", async () => {
@@ -1169,11 +1180,14 @@ const englishText = {
   "गर्मी में हल्के, सांस लेने वाले और आरामदायक कपड़े चुनें।": "Choose light, breathable, comfortable clothes for warm weather.",
 
   "ठंड के लिए जैकेट या ब्लेज़र साथ रखें।": "Bring a jacket or blazer for cold weather.",
+  "बर्फ़ की संभावना है—गर्म परतें, ऊनी मोज़े और ग्रिप वाले वाटरप्रूफ जूते रखें।": "Snow is possible—pack warm layers, wool socks, and grippy waterproof shoes.",
   "बारिश में पानी से कम खराब होने वाले जूते चुनें।": "Choose shoes that can handle rain.",
   "गर्मी में हल्के और आरामदायक कपड़े चुनें।": "Choose light, comfortable clothes for warm weather.",
   "मेरी अलमारी से लुक सुझाओ": "Suggest a look from my wardrobe",
   "मौसम और लुक देख रहे हैं…": "Checking the weather and planning your look…",
-  "अभी मौसम का अनुमान अगले 16 दिनों तक उपलब्ध है। पास की तारीख चुनें।": "Weather forecasts are currently available only for the next 16 days. Choose a nearer date.",
+  "अगले 16 दिनों में वास्तविक मौसम देखें; आगे की तारीख के लिए जगह का मौसमी अनुमान लेकर कपड़े अपने आप चुनेंगे।": "Live forecasts are used for the next 16 days; farther dates use a destination-based climate estimate to suggest outfits.",
+  "इस तारीख के लिए मौसमी जानकारी उपलब्ध नहीं है। 2050 या उससे पहले की तारीख चुनें।": "Climate estimates are available only through 2050. Choose a date on or before 2050.",
+  "जलवायु अनुमान (वास्तविक पूर्वानुमान नहीं; CMIP6 / Open-Meteo)": "Climate estimate (not a forecast; CMIP6 / Open-Meteo)",
   "कार्यक्रम की तारीख आज या आने वाले दिनों में होनी चाहिए।": "The event date must be today or a future date.",
   "कार्यक्रम की सही तारीख चुनें।": "Choose a valid event date.",
   "यह शहर या venue map पर नहीं मिला।": "This city or venue could not be found on the map.",
@@ -1343,8 +1357,8 @@ function applyPageLanguage() {
   setEnglish("#partySearch", "e.g. wedding, birthday, or night party");
   setEnglish('label[for="eventDate"]', "When are you going?");
   setEnglish('label[for="eventLocation"]', "Where are you going?");
-  setEnglish("#eventLocation", "City or place, e.g. Jaipur");
-  setEnglish(".form-panel form > .planner-hint", "We’ll check the forecast for the next 16 days and choose clothes from your wardrobe.");
+  setEnglish("#eventLocation", "Destination city, e.g. Srinagar or Gulmarg");
+  setEnglish(".form-panel form > .planner-hint", "Enter a destination and date. We’ll check the weather and suggest clothes automatically; dates beyond 16 days use a climate estimate.");
   setEnglish('label[for="audience"]', "Who is the look for?");
   setDatalistOptions(
     "partySuggestions",

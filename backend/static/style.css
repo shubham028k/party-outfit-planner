@@ -204,7 +204,7 @@ input {
 
 .planner-grid {
   display: grid;
-  grid-template-columns: 0.9fr 1.1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 
