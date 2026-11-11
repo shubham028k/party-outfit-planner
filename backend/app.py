@@ -538,6 +538,8 @@ def translate_outfit():
     source_values = {}
     for field in fields:
         value = outfit.get(field, "")
+        if value is None:
+            value = ""
         if not isinstance(value, str) or len(value) > 600:
             return jsonify({"error": "लुक की जानकारी सही नहीं है।"}), 400
         source_values[field] = value.strip()
@@ -1476,7 +1478,7 @@ def perfume_suggestion(audience):
 
 def make_recommendation(
     user_id, party_type, weather, style, audience,
-    bottom_preference="trousers", outfit_type="any"
+    bottom_preference="trousers", outfit_type="any", wardrobe_only=False
 ):
     uses_ethnic_wear = audience == "women" and outfit_type in ETHNIC_OUTFIT_TYPES
     if audience == "women" and outfit_type in ETHNIC_TYPE_OUTFITS:
@@ -1498,43 +1500,62 @@ def make_recommendation(
             "lehenga": "lehenga",
             "kurti": "bottom"
         }.get(outfit_type, "bottom")
+        bottom_category = ethnic_bottom_category
         bottom, bottom_image = wardrobe_pick(
-            user_id, ethnic_bottom_category, defaults[1], audience,
+            user_id, ethnic_bottom_category,
+            None if wardrobe_only else defaults[1], audience,
             include_image=True, weather=weather
         )
     elif bottom_preference == "shorts":
+        bottom_category = "shorts"
         bottom, bottom_image = wardrobe_pick(
             user_id,
             "shorts",
-            SHORTS_OUTFITS[audience][style],
+            None if wardrobe_only else SHORTS_OUTFITS[audience][style],
             audience,
             include_image=True,
             weather=weather
         )
     else:
+        bottom_category = "bottom"
         bottom, bottom_image = wardrobe_pick(
-            user_id, "bottom", defaults[1], audience,
+            user_id, "bottom", None if wardrobe_only else defaults[1], audience,
             include_image=True, weather=weather
         )
+        if wardrobe_only and bottom is None and bottom_preference != "shorts":
+            alternate_categories = (
+                ["saree", "salwar", "lehenga", "kurti", "shorts"]
+                if audience == "women" else ["shorts"]
+            )
+            for alternate_category in alternate_categories:
+                bottom, bottom_image = wardrobe_pick(
+                    user_id, alternate_category, None, audience,
+                    include_image=True, weather=weather
+                )
+                if bottom is not None:
+                    bottom_category = alternate_category
+                    break
 
     top, top_image = wardrobe_pick(
-        user_id, "top", defaults[0], audience,
+        user_id, "top", None if wardrobe_only else defaults[0], audience,
         include_image=True, weather=weather
     )
     shoes, shoes_image = wardrobe_pick(
-        user_id, "shoes", defaults[2], audience, include_image=True,
+        user_id, "shoes", None if wardrobe_only else defaults[2], audience, include_image=True,
         weather=weather
     )
     accessory, accessory_image = wardrobe_pick(
-        user_id, "accessory", defaults[3], audience, include_image=True,
+        user_id, "accessory", None if wardrobe_only else defaults[3], audience, include_image=True,
         weather=weather
     )
     eyewear, eyewear_image = wardrobe_pick(
-        user_id, "eyewear", eyewear_suggestion(audience), audience,
+        user_id, "eyewear",
+        None if wardrobe_only else eyewear_suggestion(audience), audience,
         include_image=True, weather=weather
     )
     perfume, perfume_image = wardrobe_pick(
-        user_id, "perfume", perfume_suggestion(audience), audience,
+        user_id, "perfume",
+        None if wardrobe_only else perfume_suggestion(audience), audience,
         include_image=True, weather=weather
     )
     outfit = {
@@ -1544,6 +1565,7 @@ def make_recommendation(
         "accessory": accessory,
         "eyewear": eyewear,
         "perfume": perfume,
+        "item_categories": {"bottom": bottom_category},
         "item_images": {
             key: value for key, value in {
                 "top": top_image,
@@ -2200,7 +2222,7 @@ def plan_party_outfit():
         "night": "bold"
     }[party]
     outfit = make_recommendation(
-        session["user_id"], party, weather, style, audience
+        session["user_id"], party, weather, style, audience, wardrobe_only=True
     )
     outfit["weather_outfit"] = weather_outfit_suggestion(
         weather, weather_details or {}, location
@@ -2407,89 +2429,6 @@ def add_wardrobe_item():
     }), 201
 
 
-@app.post("/api/wardrobe/from-outfit")
-@login_required
-def save_outfit_items_to_wardrobe():
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify({"error": "लुक की जानकारी सही नहीं है।"}), 400
-    selection = data.get("selection")
-    outfit = data.get("outfit")
-    if not isinstance(selection, dict) or not isinstance(outfit, dict):
-        return jsonify({"error": "लुक की जानकारी सही नहीं है।"}), 400
-    audience = selection.get("audience")
-    weather = selection.get("weather", "any")
-    if (
-        not isinstance(audience, str)
-        or audience not in WARDROBE_AUDIENCES
-        or not isinstance(weather, str)
-        or weather not in WARDROBE_WEATHER
-    ):
-        return jsonify({"error": "अलमारी के विकल्प सही नहीं हैं।"}), 400
-
-    items = []
-    skipped = 0
-    field_categories = {
-        "top": "top", "bottom": "bottom", "shoes": "shoes",
-        "accessory": "accessory", "eyewear": "eyewear", "perfume": "perfume"
-    }
-    for field, default_category in field_categories.items():
-        name = outfit.get(field)
-        if name is None:
-            continue
-        if not isinstance(name, str) or len(name.strip()) > 300:
-            return jsonify({"error": "लुक में कपड़ों की जानकारी सही नहीं है।"}), 400
-        name = name.strip()
-        if not name:
-            continue
-        if field == "eyewear" and name == eyewear_suggestion(audience):
-            continue
-        if field == "perfume" and name == perfume_suggestion(audience):
-            continue
-        category = default_category
-        if field == "bottom":
-            inferred_category = infer_wardrobe_category(name)
-            if inferred_category in {"shorts", "saree", "salwar", "lehenga", "kurti"}:
-                category = inferred_category
-        if len(name) > 60:
-            skipped += 1
-            continue
-        items.append((name, category))
-
-    if not items:
-        return jsonify({"added": 0, "skipped": skipped})
-    audience_options = (*wardrobe_audience_options(audience), "all")
-    audience_placeholders = ", ".join("?" for _ in audience_options)
-    added = 0
-    seen = set()
-    with connect_db() as connection:
-        for name, category in items:
-            dedupe_key = (name.casefold(), category)
-            if dedupe_key in seen:
-                skipped += 1
-                continue
-            seen.add(dedupe_key)
-            existing = connection.execute(
-                f"""SELECT name FROM wardrobe_items
-                    WHERE user_id = ? AND category = ?
-                      AND audience IN ({audience_placeholders})""",
-                (session["user_id"], category, *audience_options)
-            ).fetchall()
-            if any(row["name"].strip().casefold() == name.casefold() for row in existing):
-                skipped += 1
-                continue
-            connection.execute(
-                """INSERT INTO wardrobe_items
-                   (name, category, created_at, user_id, audience, weather,
-                    image_data, image_mime)
-                   VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)""",
-                (name, category, datetime.now().isoformat(timespec="seconds"),
-                 session["user_id"], audience, weather)
-            )
-            added += 1
-    return jsonify({"added": added, "skipped": skipped}), 201
-
-
 @app.delete("/api/wardrobe/<int:item_id>")
 @login_required
 def delete_wardrobe_item(item_id):
@@ -2547,18 +2486,27 @@ def save_outfit():
 
     supplied_outfit = data.get("outfit")
     if supplied_outfit is not None:
-        outfit_fields = (
-            "top", "bottom", "shoes", "accessory", "weather_tip"
-        )
-        if not isinstance(supplied_outfit, dict) or any(
-            not isinstance(supplied_outfit.get(field), str)
-            or not supplied_outfit[field].strip()
-            or len(supplied_outfit[field]) > 300
-            for field in outfit_fields
+        outfit_fields = ("top", "bottom", "shoes", "accessory", "weather_tip")
+        if (
+            not isinstance(supplied_outfit, dict)
+            or not isinstance(supplied_outfit.get("weather_tip"), str)
+            or not supplied_outfit["weather_tip"].strip()
+            or len(supplied_outfit["weather_tip"]) > 300
+            or any(
+                value is not None and (
+                    not isinstance(value, str) or not value.strip() or len(value) > 300
+                )
+                for field in ("top", "bottom", "shoes", "accessory")
+                for value in [supplied_outfit.get(field)]
+            )
         ):
             return jsonify({"error": "दिख रहे लुक की जानकारी सही नहीं है।"}), 400
 
-        outfit = {field: supplied_outfit[field].strip() for field in outfit_fields}
+        outfit = {
+            field: supplied_outfit[field].strip()
+            for field in outfit_fields
+            if isinstance(supplied_outfit.get(field), str) and supplied_outfit[field].strip()
+        }
         supplied_weather_outfit = supplied_outfit.get("weather_outfit")
         if supplied_weather_outfit is not None and (
             not isinstance(supplied_weather_outfit, str)
@@ -2574,21 +2522,15 @@ def save_outfit():
             or len(supplied_eyewear) > 300
         ):
             return jsonify({"error": "चश्मे की जानकारी सही नहीं है।"}), 400
-        outfit["eyewear"] = (
-            supplied_eyewear.strip()
-            if isinstance(supplied_eyewear, str) and supplied_eyewear.strip()
-            else eyewear_suggestion(audience)
-        )
+        if isinstance(supplied_eyewear, str) and supplied_eyewear.strip():
+            outfit["eyewear"] = supplied_eyewear.strip()
         supplied_perfume = supplied_outfit.get("perfume")
         if supplied_perfume is not None and (
             not isinstance(supplied_perfume, str) or len(supplied_perfume) > 300
         ):
             return jsonify({"error": "परफ्यूम की जानकारी सही नहीं है।"}), 400
-        outfit["perfume"] = (
-            supplied_perfume.strip()
-            if isinstance(supplied_perfume, str) and supplied_perfume.strip()
-            else perfume_suggestion(audience)
-        )
+        if isinstance(supplied_perfume, str) and supplied_perfume.strip():
+            outfit["perfume"] = supplied_perfume.strip()
         outfit["location"] = location.strip()
         if event_date:
             try:
