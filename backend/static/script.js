@@ -6,6 +6,7 @@ const resultPlaceholder = document.getElementById("resultPlaceholder");
 const outfitResult = document.getElementById("outfitResult");
 const partySearchInput = document.getElementById("partySearch");
 const eventDateInput = document.getElementById("eventDate");
+const eventDatePreview = document.getElementById("eventDatePreview");
 const eventLocationInput = document.getElementById("eventLocation");
 const personNameInput = document.getElementById("personName");
 const wardrobeSearch = document.getElementById("wardrobeSearch");
@@ -21,6 +22,20 @@ function dateInputValue(date) {
 
 eventDateInput.min = dateInputValue(new Date());
 eventDateInput.value = eventDateInput.min;
+
+function updateEventDatePreview() {
+  if (!eventDatePreview || !eventDateInput.value) return;
+  const date = new Date(eventDateInput.value + "T00:00:00");
+  const formattedDate = new Intl.DateTimeFormat(
+    appLanguage === "en" ? "en-IN" : "hi-IN",
+    { weekday: "long", day: "numeric", month: "long", year: "numeric" }
+  ).format(date);
+  eventDatePreview.textContent = appLanguage === "en"
+    ? "Selected date: " + formattedDate
+    : "चुनी हुई तारीख: " + formattedDate;
+}
+
+eventDateInput.addEventListener("change", updateEventDatePreview);
 
 async function readJsonResponse(response) {
   const contentType = (response.headers.get("content-type") || "").toLowerCase();
@@ -1411,6 +1426,7 @@ function applyPageLanguage() {
   appLanguage = languageSelect.value;
   localStorage.setItem("lookbook-language", appLanguage);
   document.documentElement.lang = appLanguage;
+  updateEventDatePreview();
 
   setEnglish(
     ".topbar-note",
@@ -1448,6 +1464,7 @@ function applyPageLanguage() {
   setEnglish("#designIdea .eyebrow", "DESIGN INSPIRATION", false, "डिज़ाइन की झलक");
   setEnglish("#colorIdeasTitle", "Clothing and shoe color combinations");
   setEnglish("#saveButton span", "Save this look");
+  setEnglish("#saveHint", "Create a look first; then you can save it.", false, "पहले लुक बनाओ; फिर इसे सेव कर पाओगे।");
   document.querySelectorAll(".outfit-item small").forEach((item, index) => {
     const labels = ["Top", "Bottom", "Shoes", "Accessory", "Glasses"];
     const original = ["ऊपर", "नीचे", "जूते", "एक्सेसरी", "चश्मा"];

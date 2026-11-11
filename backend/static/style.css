@@ -304,6 +304,38 @@ select:focus,
   color: #77738e;
 }
 
+.planner-input[type="date"] {
+  height: 54px;
+  color-scheme: dark;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.planner-input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: brightness(0) invert(1);
+  opacity: 0.9;
+}
+
+.date-preview {
+  display: block;
+  min-height: 18px;
+  margin-top: 7px;
+  color: #e8ddff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.save-hint {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 .primary-button,
 .secondary-button {
   width: 100%;

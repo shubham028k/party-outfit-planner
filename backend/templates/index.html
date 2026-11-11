@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#17152b">
   <title>पार्टी आउटफिट प्लानर · LOOKBOOK</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261111-6">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261111-7">
 </head>
 <body>
   <div class="page-shell">
@@ -55,6 +55,7 @@
             <label for="eventDate">कब जाना है?</label>
             <input id="eventDate" class="planner-input" name="event_date"
                    type="date" required>
+            <small id="eventDatePreview" class="date-preview" aria-live="polite"></small>
 
             <label for="eventLocation">कहाँ जाना है?</label>
             <input id="eventLocation" class="planner-input" name="location"
@@ -118,15 +119,12 @@
               </div>
             </section>
             <div class="weather-tip"><span>✦</span><p id="weatherTip"></p></div>
-            <section class="color-ideas" aria-labelledby="colorIdeasTitle">
-              <h3 id="colorIdeasTitle">कपड़ों और जूतों के रंगों के मेल</h3>
-              <div id="colorCombinationList" class="color-combination-list"></div>
-            </section>
-            <button id="saveButton" class="secondary-button" type="button">
-              ♡ <span>इस लुक को सेव करो</span>
-            </button>
-            <p id="saveMessage" class="save-message" aria-live="polite"></p>
           </div>
+          <button id="saveButton" class="secondary-button" type="button" disabled>
+            ♡ <span>इस लुक को सेव करो</span>
+          </button>
+          <small id="saveHint" class="save-hint">पहले लुक बनाओ; फिर इसे सेव कर पाओगे।</small>
+          <p id="saveMessage" class="save-message" aria-live="polite"></p>
         </div>
       </section>
 
@@ -253,6 +251,6 @@
     </footer>
   </div>
 
-  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-11"></script>
+  <script src="{{ url_for('static', filename='script.js') }}?v=20261111-12"></script>
 </body>
 </html>
