@@ -495,9 +495,16 @@ function renderLookWeather(weather, details, location, eventDate) {
     : "";
   const place = location ? ` · ${location}` : "";
   const isEstimate = details?.is_estimate === true;
+  const estimateLabel = details?.source === "historical_monthly_normal"
+    ? appLanguage === "en"
+      ? "Past 5-year monthly average (estimate)"
+      : "पिछले 5 वर्षों का मासिक औसत (अनुमान)"
+    : appLanguage === "en"
+      ? "Climate estimate (not a forecast; CMIP6 / Open-Meteo)"
+      : "जलवायु अनुमान (वास्तविक पूर्वानुमान नहीं; CMIP6 / Open-Meteo)";
   element.textContent = appLanguage === "en"
-    ? `${isEstimate ? "Climate estimate (not a forecast; CMIP6 / Open-Meteo)" : "Weather"}: ${label}${temperature}${isEstimate ? climateRain : rainChance}${snow}${place}${date}`
-    : `${isEstimate ? "जलवायु अनुमान (वास्तविक पूर्वानुमान नहीं; CMIP6 / Open-Meteo)" : "मौसम"}: ${label}${temperature}${isEstimate ? climateRain : rainChance}${snow}${place}${date}`;
+    ? `${isEstimate ? estimateLabel : "Weather"}: ${label}${temperature}${isEstimate ? climateRain : rainChance}${snow}${place}${date}`
+    : `${isEstimate ? estimateLabel : "मौसम"}: ${label}${temperature}${isEstimate ? climateRain : rainChance}${snow}${place}${date}`;
 }
 
 saveButton.addEventListener("click", async () => {

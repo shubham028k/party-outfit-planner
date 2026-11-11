@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, time, timedelta, timezone
 import sqlite3
+import calendar
 import json
 import math
 import os
@@ -1084,51 +1085,95 @@ def climate_weather_for_event(latitude, longitude, requested_date):
     }
 
 
-def weather_for_event(location, event_date):
+def historical_weather_for_month(latitude, longitude, requested_date):
+    start_date = datetime(
+        requested_date.year - 5, requested_date.month, 1
+    ).date()
+    end_year = requested_date.year - 1
+    end_date = datetime(
+        end_year,
+        requested_date.month,
+        calendar.monthrange(end_year, requested_date.month)[1]
+    ).date()
+    archive_url = (
+        "https://archive-api.open-meteo.com/v1/archive?"
+        + urlencode({
+            "latitude": latitude,
+            "longitude": longitude,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "daily": (
+                "temperature_2m_max,temperature_2m_min,"
+                "precipitation_sum,snowfall_sum"
+            ),
+            "timezone": "auto"
+        })
+    )
+    archive = fetch_map_json(archive_url, timeout=8)
+    if not isinstance(archive, dict):
+        raise RuntimeError("Historical weather service returned invalid data.")
+    daily = archive.get("daily", {})
+    if not isinstance(daily, dict):
+        raise RuntimeError("Historical weather service returned invalid daily data.")
+    dates = daily.get("time", [])
+    if not isinstance(dates, list):
+        raise RuntimeError("Historical weather service returned invalid dates.")
+
+    month_indices = [
+        index for index, value in enumerate(dates)
+        if isinstance(value, str)
+        and len(value) >= 7
+        and value[5:7] == f"{requested_date.month:02d}"
+    ]
     try:
-        requested_date = datetime.strptime(event_date, "%Y-%m-%d").date()
-    except (TypeError, ValueError) as error:
-        raise ValueError("कार्यक्रम की सही तारीख चुनें।") from error
-
-    normalized_location = location.casefold().strip()
-    for suffix in (", india", " india"):
-        if normalized_location.endswith(suffix):
-            normalized_location = normalized_location[:-len(suffix)].strip()
-            break
-    region_center = REGIONAL_LOCATION_CENTERS.get(normalized_location)
-    if region_center:
-        latitude, longitude = region_center
-    else:
-        geocode_url = (
-            "https://geocoding-api.open-meteo.com/v1/search?"
-            + urlencode({
-                "name": location,
-                "count": 1,
-                "language": "en",
-                "format": "json"
-            })
-        )
-        places = fetch_map_json(geocode_url, timeout=8)
-        if not isinstance(places, dict):
-            raise RuntimeError("Location service returned invalid data.")
-        results = places.get("results", [])
-        if not isinstance(results, list):
-            raise RuntimeError("Location service returned invalid results.")
-        if not results:
-            raise ValueError("यह शहर या venue map पर नहीं मिला।")
-        try:
-            latitude = float(results[0]["latitude"])
-            longitude = float(results[0]["longitude"])
-        except (KeyError, TypeError, ValueError) as error:
-            raise RuntimeError("Location service ने गलत coordinates दिए।") from error
-    if (
-        not math.isfinite(latitude)
-        or not math.isfinite(longitude)
-        or not (-90 <= latitude <= 90)
-        or not (-180 <= longitude <= 180)
+        maxima = [float(daily["temperature_2m_max"][index]) for index in month_indices]
+        minima = [float(daily["temperature_2m_min"][index]) for index in month_indices]
+        precipitation = [
+            float(daily["precipitation_sum"][index]) for index in month_indices
+        ]
+        snowfall = [
+            float(daily["snowfall_sum"][index]) for index in month_indices
+        ]
+    except (IndexError, KeyError, TypeError, ValueError) as error:
+        raise RuntimeError(
+            "Historical weather service returned incomplete data."
+        ) from error
+    if not month_indices or not all(
+        math.isfinite(value)
+        for values in (maxima, minima, precipitation, snowfall)
+        for value in values
     ):
-        raise RuntimeError("Location service ने गलत coordinates दिए।")
+        raise RuntimeError("Historical weather service returned invalid values.")
 
+    maximum = sum(maxima) / len(maxima)
+    minimum = sum(minima) / len(minima)
+    average_precipitation = sum(precipitation) / len(precipitation)
+    average_snowfall = sum(snowfall) / len(snowfall)
+    if average_snowfall >= 0.2 or minimum <= 12 or (minimum + maximum) / 2 <= 17:
+        condition = "cold"
+    elif average_precipitation >= 2.5:
+        condition = "rainy"
+    else:
+        condition = "warm"
+
+    return {
+        "condition": condition,
+        "temperature_min": minimum,
+        "temperature_max": maximum,
+        "precipitation_sum": average_precipitation,
+        "snowfall_sum": average_snowfall,
+        "latitude": latitude,
+        "longitude": longitude,
+        "is_estimate": True,
+        "source": "historical_monthly_normal"
+    }
+
+
+class ForecastWindowExceeded(RuntimeError):
+    pass
+
+
+def live_weather_forecast(latitude, longitude, requested_date):
     forecast_url = (
         "https://api.open-meteo.com/v1/forecast?"
         + urlencode({
@@ -1160,8 +1205,11 @@ def weather_for_event(location, event_date):
         if requested_date < forecast_start:
             raise ValueError("कार्यक्रम की तारीख आज या आने वाले दिनों में होनी चाहिए।")
         if requested_date > forecast_end:
-            return climate_weather_for_event(latitude, longitude, requested_date)
+            raise ForecastWindowExceeded(
+                "The live weather forecast does not cover this date."
+            )
         raise RuntimeError("मौसम सेवा ने इस तारीख का अनुमान नहीं दिया।")
+
     index = dates.index(requested_date.isoformat())
     try:
         maximum = float(daily["temperature_2m_max"][index])
@@ -1202,6 +1250,125 @@ def weather_for_event(location, event_date):
         "is_estimate": False,
         "source": "forecast"
     }
+
+
+def fallback_weather_for_event(latitude, longitude, requested_date, use_climate):
+    if use_climate and requested_date <= datetime.strptime(
+        "2050-01-01", "%Y-%m-%d"
+    ).date():
+        try:
+            return climate_weather_for_event(
+                latitude, longitude, requested_date
+            )
+        except RuntimeError as error:
+            app.logger.warning("Climate weather fallback failed: %s", error)
+    try:
+        return historical_weather_for_month(latitude, longitude, requested_date)
+    except RuntimeError as archive_error:
+        if not use_climate and requested_date <= datetime.strptime(
+            "2050-01-01", "%Y-%m-%d"
+        ).date():
+            try:
+                return climate_weather_for_event(
+                    latitude, longitude, requested_date
+                )
+            except RuntimeError as climate_error:
+                app.logger.warning(
+                    "Climate weather fallback failed: %s", climate_error
+                )
+        raise RuntimeError(
+            "Live forecast and weather estimate services are unavailable."
+        ) from archive_error
+
+
+def weather_for_event(location, event_date):
+    try:
+        requested_date = datetime.strptime(event_date, "%Y-%m-%d").date()
+    except (TypeError, ValueError) as error:
+        raise ValueError("कार्यक्रम की सही तारीख चुनें।") from error
+
+    normalized_location = location.casefold().strip()
+    for suffix in (", india", " india"):
+        if normalized_location.endswith(suffix):
+            normalized_location = normalized_location[:-len(suffix)].strip()
+            break
+    region_center = REGIONAL_LOCATION_CENTERS.get(normalized_location)
+    if region_center:
+        latitude, longitude = region_center
+    else:
+        geocode_url = (
+            "https://geocoding-api.open-meteo.com/v1/search?"
+            + urlencode({
+                "name": location,
+                "count": 1,
+                "language": "en",
+                "format": "json"
+            })
+        )
+        try:
+            places = fetch_map_json(geocode_url, timeout=8)
+        except RuntimeError as geocoding_error:
+            app.logger.warning(
+                "Primary weather geocoding failed: %s", geocoding_error
+            )
+            fallback_url = (
+                "https://nominatim.openstreetmap.org/search?"
+                + urlencode({
+                    "q": location,
+                    "format": "jsonv2",
+                    "limit": 1
+                })
+            )
+            try:
+                places = fetch_map_json(fallback_url, timeout=8)
+            except RuntimeError as fallback_error:
+                raise RuntimeError(
+                    "Both location lookup services are unavailable."
+                ) from fallback_error
+            if not isinstance(places, list):
+                raise RuntimeError("Fallback location service returned invalid data.")
+            if not places:
+                raise ValueError("यह शहर या venue map पर नहीं मिला।")
+            try:
+                latitude = float(places[0]["lat"])
+                longitude = float(places[0]["lon"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise RuntimeError(
+                    "Fallback location service returned invalid coordinates."
+                ) from error
+        else:
+            if not isinstance(places, dict):
+                raise RuntimeError("Location service returned invalid data.")
+            results = places.get("results", [])
+            if not isinstance(results, list):
+                raise RuntimeError("Location service returned invalid results.")
+            if not results:
+                raise ValueError("यह शहर या venue map पर नहीं मिला।")
+            try:
+                latitude = float(results[0]["latitude"])
+                longitude = float(results[0]["longitude"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise RuntimeError("Location service ने गलत coordinates दिए।") from error
+    if (
+        not math.isfinite(latitude)
+        or not math.isfinite(longitude)
+        or not (-90 <= latitude <= 90)
+        or not (-180 <= longitude <= 180)
+    ):
+        raise RuntimeError("Location service ने गलत coordinates दिए।")
+
+    try:
+        return live_weather_forecast(latitude, longitude, requested_date)
+    except ForecastWindowExceeded as forecast_error:
+        app.logger.info("%s", forecast_error)
+        return fallback_weather_for_event(
+            latitude, longitude, requested_date, use_climate=True
+        )
+    except RuntimeError as forecast_error:
+        app.logger.warning("Live weather forecast failed: %s", forecast_error)
+        return fallback_weather_for_event(
+            latitude, longitude, requested_date, use_climate=False
+        )
 
 
 def wardrobe_pick(
@@ -1976,7 +2143,10 @@ def plan_party_outfit():
         except (RuntimeError, KeyError, TypeError) as error:
             app.logger.warning("Unable to get event weather: %s", error)
             return jsonify({
-                "error": "मौसम की जानकारी अभी नहीं मिल पाई। थोड़ी देर बाद फिर कोशिश करें।"
+                "error": (
+                    "इस जगह का लाइव मौसम और मौसमी औसत अभी उपलब्ध नहीं है। "
+                    "पास का बड़ा शहर डालें या कुछ देर बाद फिर कोशिश करें।"
+                )
             }), 502
         weather = weather_details["condition"]
     else:

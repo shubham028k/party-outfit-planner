@@ -367,6 +367,109 @@ class OutfitPlannerTests(unittest.TestCase):
         self.assertEqual(result["source"], "climate_estimate")
         self.assertEqual(fetch.call_count, 3)
 
+    def test_weather_lookup_falls_back_to_recent_monthly_weather_when_forecast_fails(self):
+        event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        requested_date = datetime.strptime(event_date, "%Y-%m-%d").date()
+        monthly_dates = [
+            f"{requested_date.year - year_offset}-{requested_date.month:02d}-15"
+            for year_offset in range(1, 6)
+        ]
+        geocoding = {"results": [{"latitude": 34.1, "longitude": 74.8}]}
+        archive = {
+            "daily": {
+                "time": monthly_dates,
+                "temperature_2m_max": [10, 11, 12, 10, 9],
+                "temperature_2m_min": [1, 2, 3, 1, 0],
+                "precipitation_sum": [0, 0, 0, 0, 0],
+                "snowfall_sum": [0, 0, 0, 0, 0],
+            }
+        }
+        with patch.object(
+            outfit_app,
+            "fetch_map_json",
+            side_effect=[
+                geocoding,
+                RuntimeError("live forecast timeout"),
+                archive,
+            ],
+        ) as fetch:
+            result = outfit_app.weather_for_event("Srinagar", event_date)
+
+        self.assertEqual(result["condition"], "cold")
+        self.assertTrue(result["is_estimate"])
+        self.assertEqual(result["source"], "historical_monthly_normal")
+        self.assertEqual(fetch.call_count, 3)
+        self.assertIn("archive-api.open-meteo.com", fetch.call_args_list[2].args[0])
+
+    def test_party_plan_returns_outfit_when_live_weather_service_fails(self):
+        self.register()
+        event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        requested_date = datetime.strptime(event_date, "%Y-%m-%d").date()
+        archive = {
+            "daily": {
+                "time": [
+                    f"{requested_date.year - year_offset}-{requested_date.month:02d}-15"
+                    for year_offset in range(1, 6)
+                ],
+                "temperature_2m_max": [10, 11, 12, 10, 9],
+                "temperature_2m_min": [1, 2, 3, 1, 0],
+                "precipitation_sum": [0, 0, 0, 0, 0],
+                "snowfall_sum": [0, 0, 0, 0, 0],
+            }
+        }
+        with patch.object(
+            outfit_app,
+            "fetch_map_json",
+            side_effect=[
+                {"results": [{"latitude": 34.1, "longitude": 74.8}]},
+                RuntimeError("live forecast timeout"),
+                archive,
+            ],
+        ):
+            response = self.client.post(
+                "/api/plan",
+                json={
+                    "party_name": "birthday",
+                    "event_date": event_date,
+                    "location": "Srinagar",
+                    "audience": "men",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(
+            data["outfit"]["weather_details"]["source"],
+            "historical_monthly_normal"
+        )
+        self.assertIn("थर्मल/ऊनी इनर", data["outfit"]["weather_outfit"])
+
+    def test_weather_lookup_uses_secondary_geocoder_when_primary_fails(self):
+        event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        forecast = {
+            "daily": {
+                "time": [event_date],
+                "temperature_2m_max": [29],
+                "temperature_2m_min": [17],
+                "precipitation_probability_max": [20],
+                "weather_code": [2],
+            }
+        }
+        with patch.object(
+            outfit_app,
+            "fetch_map_json",
+            side_effect=[
+                RuntimeError("primary geocoder timeout"),
+                [{"lat": "26.9", "lon": "75.8"}],
+                forecast,
+            ],
+        ) as fetch:
+            result = outfit_app.weather_for_event("Jaipur", event_date)
+
+        self.assertEqual(result["condition"], "warm")
+        self.assertEqual(fetch.call_count, 3)
+        self.assertIn("nominatim.openstreetmap.org", fetch.call_args_list[1].args[0])
+
     def test_weather_lookup_uses_geocoded_coordinates_and_actual_daily_data(self):
         event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
         geocoding = {"results": [{"latitude": 26.9, "longitude": 75.8}]}
