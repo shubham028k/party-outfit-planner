@@ -233,13 +233,13 @@ class OutfitPlannerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("जगह", response.get_json()["error"])
 
-    def test_weather_lookup_rejects_dates_without_a_supported_forecast(self):
+    def test_weather_lookup_rejects_past_dates(self):
         today = datetime.now().date()
         forecast_dates = [
             (today + timedelta(days=offset)).isoformat()
             for offset in range(16)
         ]
-        geocoding = [{"lat": "26.9", "lon": "75.8"}]
+        geocoding = {"results": [{"latitude": 26.9, "longitude": 75.8}]}
         forecast = {"daily": {"time": forecast_dates}}
         with self.assertRaisesRegex(ValueError, "आज या आने वाले दिनों"):
             with patch.object(
@@ -248,17 +248,43 @@ class OutfitPlannerTests(unittest.TestCase):
                 outfit_app.weather_for_event(
                     "Jaipur", (today - timedelta(days=1)).isoformat()
                 )
-        with self.assertRaisesRegex(ValueError, "अगले 16 दिनों"):
-            with patch.object(
-                outfit_app, "fetch_map_json", side_effect=[geocoding, forecast]
-            ):
-                outfit_app.weather_for_event(
-                    "Jaipur", (today + timedelta(days=16)).isoformat()
-                )
+
+    def test_weather_lookup_uses_climate_estimate_after_forecast_window(self):
+        today = datetime.now().date()
+        event_date = (today + timedelta(days=16)).isoformat()
+        geocoding = {"results": [{"latitude": 26.9, "longitude": 75.8}]}
+        forecast = {
+            "daily": {
+                "time": [
+                    (today + timedelta(days=offset)).isoformat()
+                    for offset in range(16)
+                ]
+            }
+        }
+        climate = {
+            "daily": {
+                "time": [event_date],
+                "temperature_2m_max": [18],
+                "temperature_2m_min": [8],
+                "precipitation_sum": [0.2],
+                "snowfall_sum": [0],
+            }
+        }
+        with patch.object(
+            outfit_app,
+            "fetch_map_json",
+            side_effect=[geocoding, forecast, climate],
+        ) as fetch:
+            result = outfit_app.weather_for_event("Jaipur", event_date)
+
+        self.assertEqual(result["condition"], "cold")
+        self.assertTrue(result["is_estimate"])
+        self.assertEqual(result["source"], "climate_estimate")
+        self.assertEqual(fetch.call_count, 3)
 
     def test_weather_lookup_uses_geocoded_coordinates_and_actual_daily_data(self):
         event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
-        geocoding = [{"lat": "26.9", "lon": "75.8"}]
+        geocoding = {"results": [{"latitude": 26.9, "longitude": 75.8}]}
         forecast = {
             "daily": {
                 "time": [event_date],
@@ -276,7 +302,17 @@ class OutfitPlannerTests(unittest.TestCase):
         self.assertEqual(result["condition"], "warm")
         self.assertEqual((result["temperature_min"], result["temperature_max"]), (17, 29))
         self.assertEqual(fetch.call_count, 2)
+        self.assertIn("geocoding-api.open-meteo.com", fetch.call_args_list[0].args[0])
         self.assertIn("api.open-meteo.com", fetch.call_args_list[1].args[0])
+        self.assertTrue(all(call.kwargs["timeout"] == 8 for call in fetch.call_args_list))
+
+    def test_weather_lookup_reports_unknown_location(self):
+        event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        with patch.object(
+            outfit_app, "fetch_map_json", return_value={"results": []}
+        ):
+            with self.assertRaisesRegex(ValueError, "map पर नहीं मिला"):
+                outfit_app.weather_for_event("Unknown place", event_date)
 
     def test_manual_route_uses_the_user_entered_venue(self):
         self.register()
