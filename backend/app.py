@@ -380,25 +380,13 @@ STYLE_NAMES = {
     "bold": "बोल्ड"
 }
 CATEGORIES = {
-    "top", "bottom", "shorts", "shoes", "accessory", "eyewear",
+    "top", "bottom", "shorts", "shoes", "accessory", "eyewear", "perfume",
     "saree", "salwar", "lehenga", "kurti"
 }
 WARDROBE_AUDIENCES = {
     "men", "women", "adult", "children", "senior", "all"
 }
 WARDROBE_WEATHER = {"any", "warm", "cold", "rainy"}
-APPAREL_CATEGORIES = {
-    "top", "bottom", "shorts", "saree", "salwar", "lehenga", "kurti"
-}
-CLOTHING_SIZES = {
-    "any", "XS", "S", "M", "L", "XL", "XXL", "XXXL",
-    "4XL", "5XL", "6XL", "7XL", "8XL"
-}
-FIT_PREFERENCES = {
-    "regular": "नियमित फिट",
-    "relaxed": "आरामदायक ढीला फिट",
-    "plus": "प्लस-साइज़ फिट"
-}
 
 
 def wardrobe_audience_options(audience):
@@ -497,7 +485,7 @@ def translate_outfit():
     outfit = data.get("outfit")
     fields = (
         "top", "bottom", "shoes", "accessory", "weather_tip", "eyewear",
-        "design_title", "design_details"
+        "perfume", "design_title", "design_details"
     )
 
     if language not in {"en", "hi"} or not isinstance(outfit, dict):
@@ -680,24 +668,25 @@ def initialize_database():
 
 
 BUILTIN_CATALOG = [
-    {"name": "हल्की नीली ऑक्सफ़ोर्ड शर्ट", "category": "top", "color": "नीला"},
-    {"name": "सॉलिड रंग की टी-शर्ट", "category": "top", "color": "काला"},
-    {"name": "हल्के रंग का कुर्ता", "category": "top", "color": "क्रीम"},
-    {"name": "डार्क ब्लू चिनोज़", "category": "bottom", "color": "नेवी"},
-    {"name": "स्ट्रेट-फिट ब्लू जींस", "category": "bottom", "color": "नीला"},
-    {"name": "आरामदायक कॉटन शॉर्ट्स", "category": "shorts", "color": "खाकी"},
-    {"name": "सफ़ेद स्नीकर्स", "category": "shoes", "color": "सफ़ेद"},
-    {"name": "ब्राउन लोफ़र्स", "category": "shoes", "color": "भूरा"},
-    {"name": "ब्राउन जूती", "category": "shoes", "color": "भूरा"},
-    {"name": "क्लासिक घड़ी", "category": "accessory", "color": "सिल्वर"},
-    {"name": "लेदर बेल्ट", "category": "accessory", "color": "भूरा"},
-    {"name": "स्टेटमेंट इयररिंग्स", "category": "accessory", "color": "गोल्ड"},
-    {"name": "क्लासिक फ्रेम चश्मा", "category": "eyewear", "color": "काला"},
-    {"name": "धूप का चश्मा", "category": "eyewear", "color": "काला"},
-    {"name": "फ्लोरल कुर्ती", "category": "kurti", "color": "गुलाबी"},
-    {"name": "उत्सवी सलवार सूट", "category": "salwar", "color": "मरून"},
-    {"name": "एम्ब्रॉयडर्ड साड़ी", "category": "saree", "color": "जामुनी"},
-    {"name": "पार्टी लहंगा", "category": "lehenga", "color": "हरा"}
+    {"name": "हल्की नीली ऑक्सफ़ोर्ड शर्ट", "category": "top"},
+    {"name": "सॉलिड रंग की टी-शर्ट", "category": "top"},
+    {"name": "हल्के रंग का कुर्ता", "category": "top"},
+    {"name": "डार्क ब्लू चिनोज़", "category": "bottom"},
+    {"name": "स्ट्रेट-फिट ब्लू जींस", "category": "bottom"},
+    {"name": "आरामदायक कॉटन शॉर्ट्स", "category": "shorts"},
+    {"name": "सफ़ेद स्नीकर्स", "category": "shoes"},
+    {"name": "ब्राउन लोफ़र्स", "category": "shoes"},
+    {"name": "ब्राउन जूती", "category": "shoes"},
+    {"name": "क्लासिक घड़ी", "category": "accessory"},
+    {"name": "लेदर बेल्ट", "category": "accessory"},
+    {"name": "स्टेटमेंट इयररिंग्स", "category": "accessory"},
+    {"name": "क्लासिक फ्रेम चश्मा", "category": "eyewear"},
+    {"name": "धूप का चश्मा", "category": "eyewear"},
+    {"name": "हल्की खुशबू वाला परफ्यूम", "category": "perfume"},
+    {"name": "फ्लोरल कुर्ती", "category": "kurti"},
+    {"name": "उत्सवी सलवार सूट", "category": "salwar"},
+    {"name": "एम्ब्रॉयडर्ड साड़ी", "category": "saree"},
+    {"name": "पार्टी लहंगा", "category": "lehenga"}
 ]
 MAX_CALENDAR_EVENTS = 2000
 MAX_WARDROBE_IMAGE_SIZE = 5 * 1024 * 1024
@@ -1112,48 +1101,31 @@ def weather_for_event(location, event_date):
 
 
 def wardrobe_pick(
-    user_id, category, fallback, audience, size_preference="any",
-    include_image=False, weather="any"
+    user_id, category, fallback, audience, include_image=False, weather="any"
 ):
     wardrobe_audiences = wardrobe_audience_options(audience)
     audience_placeholders = ", ".join("?" for _ in wardrobe_audiences)
     with connect_db() as connection:
         items = connection.execute(
-            f"""SELECT id, name, color, size,
-                      image_data IS NOT NULL AS has_image
+            f"""SELECT id, name, image_data IS NOT NULL AS has_image
                FROM wardrobe_items
                WHERE user_id = ? AND category = ?
                  AND audience IN ({audience_placeholders}, 'all')
-                 AND (
-                    ? = 'any'
-                    OR category NOT IN ('top', 'bottom', 'shorts')
-                    OR size IN (?, 'any')
-                 )
                  AND (? = 'any' OR weather IN (?, 'any'))
                ORDER BY CASE WHEN ? != 'any' AND weather = ? THEN 0 ELSE 1 END,
                         CASE WHEN audience = ? THEN 0
                              WHEN audience = 'adult' THEN 1 ELSE 2 END,
-                        CASE WHEN category IN ('top', 'bottom', 'shorts')
-                                  AND ? != 'any' AND size = ? THEN 0
-                             WHEN category IN ('top', 'bottom', 'shorts')
-                                  AND ? != 'any' AND size = 'any' THEN 1
-                             ELSE 0 END,
                         RANDOM()
                LIMIT 50""",
             (
                 user_id,
                 category,
                 *wardrobe_audiences,
-                size_preference,
-                size_preference,
                 weather,
                 weather,
                 weather,
                 weather,
-                audience,
-                size_preference,
-                size_preference,
-                size_preference
+                audience
             )
         ).fetchall()
 
@@ -1173,23 +1145,17 @@ def wardrobe_pick(
     }.get(category, ())
     item = next((
         candidate for candidate in items
-        if not any(
-            term in f"{candidate['color']} {candidate['name']}".casefold()
-            for term in incompatible_terms
-        )
+        if not any(term in candidate["name"].casefold() for term in incompatible_terms)
     ), None)
 
     if not item:
         return (fallback, None) if include_image else fallback
 
-    item_name = f"{item['color']} {item['name']}".strip()
-    if category in APPAREL_CATEGORIES and item["size"] != "any":
-        item_name = f"{item_name} ({item['size']})"
     image_url = (
         url_for("get_wardrobe_image", item_id=item["id"])
         if item["has_image"] else None
     )
-    return (item_name, image_url) if include_image else item_name
+    return (item["name"], image_url) if include_image else item["name"]
 
 
 def eyewear_suggestion(audience):
@@ -1200,9 +1166,15 @@ def eyewear_suggestion(audience):
     return "ज़रूरत हो तो अपना पसंदीदा चश्मा; बाहर की पार्टी में धूप का चश्मा।"
 
 
+def perfume_suggestion(audience):
+    if audience == "children":
+        return "बच्चों के लिए हल्की, अभिभावक द्वारा चुनी खुशबू।"
+    return "हल्की खुशबू वाला परफ्यूम; थोड़ी मात्रा में लगाएँ।"
+
+
 def make_recommendation(
     user_id, party_type, weather, style, audience,
-    bottom_preference="trousers", size_preference="any", outfit_type="any"
+    bottom_preference="trousers", outfit_type="any"
 ):
     uses_ethnic_wear = audience == "women" and outfit_type in ETHNIC_OUTFIT_TYPES
     if audience == "women" and outfit_type in ETHNIC_TYPE_OUTFITS:
@@ -1226,7 +1198,7 @@ def make_recommendation(
         }.get(outfit_type, "bottom")
         bottom, bottom_image = wardrobe_pick(
             user_id, ethnic_bottom_category, defaults[1], audience,
-            size_preference, include_image=True, weather=weather
+            include_image=True, weather=weather
         )
     elif bottom_preference == "shorts":
         bottom, bottom_image = wardrobe_pick(
@@ -1234,18 +1206,17 @@ def make_recommendation(
             "shorts",
             SHORTS_OUTFITS[audience][style],
             audience,
-            size_preference,
             include_image=True,
             weather=weather
         )
     else:
         bottom, bottom_image = wardrobe_pick(
-            user_id, "bottom", defaults[1], audience, size_preference,
+            user_id, "bottom", defaults[1], audience,
             include_image=True, weather=weather
         )
 
     top, top_image = wardrobe_pick(
-        user_id, "top", defaults[0], audience, size_preference,
+        user_id, "top", defaults[0], audience,
         include_image=True, weather=weather
     )
     shoes, shoes_image = wardrobe_pick(
@@ -1260,19 +1231,25 @@ def make_recommendation(
         user_id, "eyewear", eyewear_suggestion(audience), audience,
         include_image=True, weather=weather
     )
+    perfume, perfume_image = wardrobe_pick(
+        user_id, "perfume", perfume_suggestion(audience), audience,
+        include_image=True, weather=weather
+    )
     outfit = {
         "top": top,
         "bottom": bottom,
         "shoes": shoes,
         "accessory": accessory,
         "eyewear": eyewear,
+        "perfume": perfume,
         "item_images": {
             key: value for key, value in {
                 "top": top_image,
                 "bottom": bottom_image,
                 "shoes": shoes_image,
                 "accessory": accessory_image,
-                "eyewear": eyewear_image
+                "eyewear": eyewear_image,
+                "perfume": perfume_image
             }.items() if value
         },
         "party_name": PARTY_NAMES[party_type],
@@ -1734,12 +1711,11 @@ def add_sample_wardrobe():
                 continue
             connection.execute(
                 """INSERT INTO wardrobe_items
-                   (name, category, color, size, created_at, user_id, audience)
-                   VALUES (?, ?, ?, 'any', ?, ?, 'all')""",
+                   (name, category, created_at, user_id, audience)
+                   VALUES (?, ?, ?, ?, 'all')""",
                 (
                     item["name"],
                     item["category"],
-                    item["color"],
                     datetime.now().isoformat(timespec="seconds"),
                     user_id
                 )
@@ -1764,7 +1740,6 @@ def recommend():
     style = data.get("style")
     audience = data.get("audience")
     bottom_preference = data.get("bottom_preference", "trousers")
-    size_preference = data.get("size_preference", "any")
     location = data.get("location", "")
     outfit_type = data.get("outfit_type", "any")
 
@@ -1774,8 +1749,6 @@ def recommend():
         or style not in STYLE_NAMES
         or audience not in AUDIENCE_NAMES
         or bottom_preference not in BOTTOM_NAMES
-        or not isinstance(size_preference, str)
-        or size_preference not in CLOTHING_SIZES
         or not isinstance(location, str)
         or len(location) > 100
         or not isinstance(outfit_type, str)
@@ -1787,7 +1760,7 @@ def recommend():
 
     outfit = make_recommendation(
         session["user_id"], party, weather, style, audience,
-        bottom_preference, size_preference, outfit_type
+        bottom_preference, outfit_type
     )
     outfit["location"] = location.strip()
     return jsonify({"outfit": outfit})
@@ -1865,7 +1838,6 @@ def plan_party_outfit():
             "style": style,
             "audience": audience,
             "bottom_preference": "trousers",
-            "size_preference": "any",
             "outfit_type": "any",
             "location": "",
             "event_date": None
@@ -1914,7 +1886,7 @@ def get_manual_event_route():
 def get_wardrobe():
     with connect_db() as connection:
         rows = connection.execute(
-            """SELECT id, name, category, color, audience, size, weather,
+            """SELECT id, name, category, audience, weather,
                       image_data IS NOT NULL AS has_image
                FROM wardrobe_items
                WHERE user_id = ?
@@ -1960,9 +1932,7 @@ def add_wardrobe_item():
     )
     name = str(data.get("name", "")).strip()
     category = data.get("category")
-    color = str(data.get("color", "")).strip()
     audience = data.get("audience", "adult")
-    size = data.get("size", "any")
     weather = data.get("weather", "any")
     image = request.files.get("image")
     image_data = None
@@ -1988,34 +1958,21 @@ def add_wardrobe_item():
     if audience not in WARDROBE_AUDIENCES:
         return jsonify({"error": "यह कपड़ा किसकी अलमारी का है, सही विकल्प चुनें।"}), 400
 
-    if not isinstance(size, str) or size not in CLOTHING_SIZES:
-        return jsonify({"error": "कपड़ों का सही साइज़ चुनें।"}), 400
-
     if weather not in WARDROBE_WEATHER:
         return jsonify({"error": "कपड़े के लिए सही मौसम चुनें।"}), 400
-
-    if category not in APPAREL_CATEGORIES and size != "any":
-        return jsonify({
-            "error": "साइज़ का विकल्प सिर्फ कपड़ों के लिए है।"
-        }), 400
-
-    if len(color) > 30:
-        return jsonify({"error": "रंग का नाम 30 अक्षरों से छोटा रखें।"}), 400
 
     with connect_db() as connection:
         cursor = connection.execute(
             """INSERT INTO wardrobe_items
-               (name, category, color, created_at, user_id, audience, size,
-                weather, image_data, image_mime)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (name, category, created_at, user_id, audience, weather,
+                image_data, image_mime)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 name,
                 category,
-                color,
                 datetime.now().isoformat(timespec="seconds"),
                 session["user_id"],
                 audience,
-                size,
                 weather,
                 image_data,
                 image_mime
@@ -2053,7 +2010,6 @@ def save_outfit():
     style = data.get("style")
     audience = data.get("audience")
     bottom_preference = data.get("bottom_preference", "trousers")
-    size_preference = data.get("size_preference", "any")
     location = data.get("location", "")
     outfit_type = data.get("outfit_type", "any")
     event_date = data.get("event_date")
@@ -2064,8 +2020,6 @@ def save_outfit():
         or style not in STYLE_NAMES
         or audience not in AUDIENCE_NAMES
         or bottom_preference not in BOTTOM_NAMES
-        or not isinstance(size_preference, str)
-        or size_preference not in CLOTHING_SIZES
         or not isinstance(location, str)
         or len(location) > 100
         or not isinstance(outfit_type, str)
@@ -2106,6 +2060,16 @@ def save_outfit():
             if isinstance(supplied_eyewear, str) and supplied_eyewear.strip()
             else eyewear_suggestion(audience)
         )
+        supplied_perfume = supplied_outfit.get("perfume")
+        if supplied_perfume is not None and (
+            not isinstance(supplied_perfume, str) or len(supplied_perfume) > 300
+        ):
+            return jsonify({"error": "परफ्यूम की जानकारी सही नहीं है।"}), 400
+        outfit["perfume"] = (
+            supplied_perfume.strip()
+            if isinstance(supplied_perfume, str) and supplied_perfume.strip()
+            else perfume_suggestion(audience)
+        )
         outfit["location"] = location.strip()
         if event_date:
             try:
@@ -2115,13 +2079,13 @@ def save_outfit():
             outfit["event_date"] = event_date
 
         supplied_images = supplied_outfit.get("item_images", {})
-        if not isinstance(supplied_images, dict) or len(supplied_images) > 5:
+        if not isinstance(supplied_images, dict) or len(supplied_images) > 6:
             return jsonify({"error": "लुक की फोटो जानकारी सही नहीं है।"}), 400
         safe_images = {}
         for field, image_url in supplied_images.items():
             match = (
                 re.fullmatch(r"/api/wardrobe/(\d+)/image", image_url)
-                if field in {"top", "bottom", "shoes", "accessory", "eyewear"}
+                if field in {"top", "bottom", "shoes", "accessory", "eyewear", "perfume"}
                 and isinstance(image_url, str)
                 else None
             )
@@ -2149,7 +2113,7 @@ def save_outfit():
     else:
         outfit = make_recommendation(
             session["user_id"], party, weather, style, audience,
-            bottom_preference, size_preference, outfit_type
+            bottom_preference, outfit_type
         )
         outfit["location"] = location.strip()
 

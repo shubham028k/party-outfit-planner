@@ -37,8 +37,6 @@ const wardrobeList = document.getElementById("wardrobeList");
 const emptyWardrobe = document.getElementById("emptyWardrobe");
 const wardrobeCount = document.getElementById("wardrobeCount");
 const wardrobeCategory = document.getElementById("wardrobeCategory");
-const wardrobeSizeField = document.getElementById("wardrobeSizeField");
-const wardrobeSize = document.getElementById("wardrobeSize");
 const wardrobeImageInput = document.getElementById("wardrobeImage");
 const wardrobeImagePreviewBox = document.getElementById("wardrobeImagePreviewBox");
 const wardrobeImagePreview = document.getElementById("wardrobeImagePreview");
@@ -64,6 +62,7 @@ const categoryNames = {
   shoes: "जूते",
   accessory: "एक्सेसरी",
   eyewear: "चश्मा",
+  perfume: "परफ्यूम",
   saree: "साड़ी",
   salwar: "सलवार-सूट",
   lehenga: "लहंगा",
@@ -315,18 +314,6 @@ function renderColorCombinations() {
   }
 }
 
-function updateWardrobeSizeField() {
-  const isClothing = [
-    "top", "bottom", "shorts", "saree", "salwar", "lehenga", "kurti"
-  ].includes(
-    wardrobeCategory.value
-  );
-  wardrobeSizeField.hidden = !isClothing;
-  if (!isClothing) wardrobeSize.value = "any";
-}
-
-wardrobeCategory.addEventListener("change", updateWardrobeSizeField);
-updateWardrobeSizeField();
 
 function translateVisibleMessages() {
   document.querySelectorAll(
@@ -394,6 +381,7 @@ function showOutfit(outfit) {
   document.getElementById("outfitShoes").textContent = outfit.shoes;
   document.getElementById("outfitAccessory").textContent = outfit.accessory;
   document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
+  document.getElementById("outfitPerfume").textContent = outfit.perfume || "—";
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
   renderLookWeather(currentSelection?.weather);
   const imageFields = {
@@ -401,7 +389,8 @@ function showOutfit(outfit) {
     outfitBottomImage: "bottom",
     outfitShoesImage: "shoes",
     outfitAccessoryImage: "accessory",
-    outfitEyewearImage: "eyewear"
+    outfitEyewearImage: "eyewear",
+    outfitPerfumeImage: "perfume"
   };
   for (const [elementId, field] of Object.entries(imageFields)) {
     const image = document.getElementById(elementId);
@@ -427,19 +416,19 @@ function showOutfit(outfit) {
 
 function updateOutfitItemLabels(audience, outfitType) {
   const labelsByType = {
-    saree: ["ब्लाउज़", "साड़ी", "जूते", "एक्सेसरी", "चश्मा"],
-    salwar: ["कुर्ती / सूट", "सलवार / पैंट", "जूते", "एक्सेसरी", "चश्मा"],
-    lehenga: ["चोली", "लहंगा", "जूते", "एक्सेसरी", "चश्मा"],
-    kurti: ["कुर्ती", "पैंट / स्कर्ट", "जूते", "एक्सेसरी", "चश्मा"]
+    saree: ["ब्लाउज़", "साड़ी", "जूते", "एक्सेसरी", "चश्मा", "परफ्यूम"],
+    salwar: ["कुर्ती / सूट", "सलवार / पैंट", "जूते", "एक्सेसरी", "चश्मा", "परफ्यूम"],
+    lehenga: ["चोली", "लहंगा", "जूते", "एक्सेसरी", "चश्मा", "परफ्यूम"],
+    kurti: ["कुर्ती", "पैंट / स्कर्ट", "जूते", "एक्सेसरी", "चश्मा", "परफ्यूम"]
   };
   const labelsEnglish = {
-    saree: ["Blouse", "Saree", "Shoes", "Accessory", "Glasses"],
-    salwar: ["Kurta / suit", "Salwar / pants", "Shoes", "Accessory", "Glasses"],
-    lehenga: ["Choli", "Lehenga", "Shoes", "Accessory", "Glasses"],
-    kurti: ["Kurti", "Pants / skirt", "Shoes", "Accessory", "Glasses"]
+    saree: ["Blouse", "Saree", "Shoes", "Accessory", "Glasses", "Perfume"],
+    salwar: ["Kurta / suit", "Salwar / pants", "Shoes", "Accessory", "Glasses", "Perfume"],
+    lehenga: ["Choli", "Lehenga", "Shoes", "Accessory", "Glasses", "Perfume"],
+    kurti: ["Kurti", "Pants / skirt", "Shoes", "Accessory", "Glasses", "Perfume"]
   };
-  const defaultHindi = ["ऊपर", "नीचे", "जूते", "एक्सेसरी", "चश्मा"];
-  const defaultEnglish = ["Top", "Bottom", "Shoes", "Accessory", "Glasses"];
+  const defaultHindi = ["ऊपर", "नीचे", "जूते", "एक्सेसरी", "चश्मा", "परफ्यूम"];
+  const defaultEnglish = ["Top", "Bottom", "Shoes", "Accessory", "Glasses", "Perfume"];
   const isTraditionalLook = audience === "women" && labelsByType[outfitType];
   const labels = isTraditionalLook
     ? (appLanguage === "en" ? labelsEnglish[outfitType] : labelsByType[outfitType])
@@ -545,9 +534,7 @@ wardrobeForm.addEventListener("submit", async (event) => {
         : enteredName;
       formData.set("name", itemName);
       formData.set("category", category);
-      formData.set("color", document.getElementById("wardrobeColor").value.trim());
       formData.set("audience", document.getElementById("wardrobeAudience").value);
-      formData.set("size", wardrobeSize.value);
       formData.set("weather", document.getElementById("wardrobeWeather").value);
       if (photo) formData.set("image", photo);
 
@@ -571,7 +558,6 @@ wardrobeForm.addEventListener("submit", async (event) => {
     if (added > 0) {
       wardrobeForm.reset();
       clearWardrobeImagePreview();
-      updateWardrobeSizeField();
       await loadWardrobe();
     }
 
@@ -619,7 +605,6 @@ function renderWardrobeItems() {
   const matchingItems = wardrobeItemsCache.filter((item) => {
     const searchableText = [
       item.name,
-      item.color,
       item.category,
       categoryNames[item.category],
       item.audience,
@@ -652,17 +637,10 @@ function createWardrobeCard(item) {
   const details = document.createElement("p");
   const category = translateText(categoryNames[item.category] || item.category);
   const audience = translateText(wardrobeAudienceNames[item.audience] || item.audience);
-  const translatedColor = translateText(item.color || "");
-  const color = hasWrongLanguageScript(translatedColor) ? "" : translatedColor;
-  const size = item.size && item.size !== "any"
-    ? ` · ${translateText("साइज़")} ${item.size}`
-    : "";
   const weather = item.weather && item.weather !== "any"
     ? ` · ${translateText("मौसम")}: ${wardrobeWeatherNames[item.weather]?.[appLanguage === "en" ? 1 : 0] || item.weather}`
     : "";
-  details.textContent = color
-    ? `${audience} · ${category} · ${color}${size}${weather}`
-    : `${audience} · ${category}${size}${weather}`;
+  details.textContent = `${audience} · ${category}${weather}`;
 
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
@@ -789,7 +767,8 @@ function createHistoryCard(saved) {
   const details = document.createElement("p");
   const translatedDetails = translateText(
     `👕 ${saved.outfit.top} · 👖 ${saved.outfit.bottom} · 👟 ${saved.outfit.shoes}` +
-    (saved.outfit.eyewear ? ` · 👓 ${saved.outfit.eyewear}` : "")
+    (saved.outfit.eyewear ? ` · 👓 ${saved.outfit.eyewear}` : "") +
+    (saved.outfit.perfume ? ` · 🧴 ${saved.outfit.perfume}` : "")
   );
   details.textContent = hasWrongLanguageScript(translatedDetails)
     ? (appLanguage === "en" ? "Outfit details" : "लुक का विवरण")
@@ -864,6 +843,7 @@ const englishText = {
   "वयस्क": "Adult", "सबके लिए": "Everyone",
   "सलवार-सूट": "Salwar suit", "लहंगा": "Lehenga", "कुर्ती": "Kurti",
   "एआई": "AI", "तस्वीर": "image", "झलक": "preview", "चश्मा": "Glasses",
+  "परफ्यूम": "Perfume",
   "आरामदायक इलास्टिक-कमर शॉर्ट्स": "Comfortable elastic-waist shorts",
   "आरामदायक उत्सवी कुर्ता": "Comfortable festive kurta",
   "आरामदायक एथनिक जूते": "Comfortable ethnic shoes",
@@ -1025,6 +1005,8 @@ const englishText = {
   "फ्लोई स्कर्ट": "Flowy skirt",
   "आरामदायक लो-हील जूते": "Comfortable low-heel shoes",
   "अगर बच्चा चश्मा पहनता है तो उसका अच्छी फिटिंग वाला अपना चश्मा रखें।": "If the child wears glasses, use their own well-fitting pair.",
+  "बच्चों के लिए हल्की, अभिभावक द्वारा चुनी खुशबू।": "A mild, parent-approved fragrance for children.",
+  "हल्की खुशबू वाला परफ्यूम; थोड़ी मात्रा में लगाएँ।": "Light perfume; use a small amount.",
   "अपना रोज़ का चश्मा; आरामदायक फ्रेम चुनें।": "Wear your usual glasses with a comfortable frame.",
   "ज़रूरत हो तो अपना पसंदीदा चश्मा; बाहर की पार्टी में धूप का चश्मा।": "Wear your preferred glasses if needed; choose sunglasses for an outdoor party.",
   "सलवार-सूट डिज़ाइन": "Salwar suit design",
@@ -1340,8 +1322,6 @@ function applyPageLanguage() {
   setOption('#audience option[value="women"]', "Women");
   setOption('#audience option[value="children"]', "Children");
   setOption('#audience option[value="senior"]', "Older adult");
-  setOption('#wardrobeSize option[value="any"]', "Any / free size");
-  setEnglish('label[for="wardrobeSize"]', "Clothing size");
   setEnglish(".form-panel .primary-button span:first-child", "Suggest a look from my wardrobe");
 
   setEnglish(".result-panel .eyebrow", "MADE FOR YOUR PLAN", false, "तुम्हारे प्लान के लिए");
@@ -1367,15 +1347,14 @@ function applyPageLanguage() {
   setEnglish('label[for="wardrobeCategory"]', "Item type");
   setEnglish('label[for="wardrobeAudience"]', "Who is this item for?");
   setEnglish('label[for="wardrobeWeather"]', "Suitable weather");
-  setEnglish('label[for="wardrobeColor"]', "Color (optional)");
   setEnglish("#wardrobeName", "e.g. Oxford shirt");
-  setEnglish("#wardrobeColor", "e.g. Navy blue");
   setOption('#wardrobeCategory option[value="top"]', "Shirt / top");
   setOption('#wardrobeCategory option[value="bottom"]', "Pants");
   setOption('#wardrobeCategory option[value="shorts"]', "Shorts");
   setOption('#wardrobeCategory option[value="shoes"]', "Shoes");
   setOption('#wardrobeCategory option[value="accessory"]', "Accessory");
-  setOption('#wardrobeCategory option[value="eyewear"]', "Glasses");
+  setOption('#wardrobeCategory option[value="eyewear"]', "👓 Glasses");
+  setOption('#wardrobeCategory option[value="perfume"]', "🧴 Perfume");
   setOption('#wardrobeCategory option[value="saree"]', "Saree");
   setOption('#wardrobeCategory option[value="salwar"]', "Salwar suit");
   setOption('#wardrobeCategory option[value="lehenga"]', "Lehenga");
@@ -1449,7 +1428,7 @@ let lastOutfit = null;
 let outfitTranslationRequest = 0;
 
 const outfitTranslationFields = [
-  "top", "bottom", "shoes", "accessory", "weather_tip", "eyewear",
+  "top", "bottom", "shoes", "accessory", "weather_tip", "eyewear", "perfume",
   "design_title", "design_details"
 ];
 
@@ -1491,6 +1470,9 @@ function outfitFallbackValues(outfitType) {
     eyewear: appLanguage === "en"
       ? "Wear your preferred glasses if needed."
       : "ज़रूरत हो तो अपना पसंदीदा चश्मा पहनें।",
+    perfume: appLanguage === "en"
+      ? "Light perfume; use a small amount."
+      : "हल्की खुशबू वाला परफ्यूम; थोड़ी मात्रा में लगाएँ।",
     design_title: appLanguage === "en" ? "Design idea" : "डिज़ाइन आइडिया",
     design_details: appLanguage === "en"
       ? "A coordinated traditional outfit design."
@@ -1539,6 +1521,7 @@ function renderLocalizedOutfit(outfit) {
   document.getElementById("outfitShoes").textContent = outfit.shoes;
   document.getElementById("outfitAccessory").textContent = outfit.accessory;
   document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
+  document.getElementById("outfitPerfume").textContent = outfit.perfume || "—";
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
   renderColorCombinations();
 }
@@ -1596,7 +1579,7 @@ async function loadBuiltinCatalog() {
     if (!response.ok) throw new Error(data.error || "Catalog load नहीं हो पाया।");
     const icons = {
       top: "👕", bottom: "👖", shorts: "🩳", shoes: "👟",
-      accessory: "⌚", eyewear: "👓", saree: "🥻",
+      accessory: "⌚", eyewear: "👓", perfume: "🧴", saree: "🥻",
       salwar: "👗", lehenga: "👗", kurti: "👚"
     };
     catalogElement.replaceChildren();
