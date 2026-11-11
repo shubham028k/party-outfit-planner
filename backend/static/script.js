@@ -361,6 +361,32 @@ function renderPersonName(outfit) {
       : `${personName} के लिए`;
 }
 
+function renderWeatherOutfitImages(outfit) {
+  const container = document.getElementById("weatherOutfitImages");
+  const itemFields = [
+    { field: "top", labels: ["ऊपर", "Top"] },
+    { field: "bottom", labels: ["नीचे", "Bottom"] },
+    { field: "shoes", labels: ["जूते", "Shoes"] }
+  ];
+  const figures = itemFields.flatMap(({ field, labels }) => {
+    const imageUrl = outfit.item_images?.[field];
+    if (typeof imageUrl !== "string" || !imageUrl) return [];
+
+    const figure = document.createElement("figure");
+    figure.className = "weather-outfit-image";
+    const image = document.createElement("img");
+    image.src = imageUrl;
+    image.alt = outfit[field] || labels[0];
+    image.loading = "lazy";
+    const caption = document.createElement("figcaption");
+    caption.textContent = labels[appLanguage === "en" ? 1 : 0];
+    figure.append(image, caption);
+    return [figure];
+  });
+  container.replaceChildren(...figures);
+  container.hidden = figures.length === 0;
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorMessage.textContent = "";
@@ -425,6 +451,7 @@ function showOutfit(outfit) {
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
   document.getElementById("weatherOutfit").textContent = outfit.weather_outfit || "";
   document.getElementById("weatherOutfitBox").hidden = !outfit.weather_outfit;
+  renderWeatherOutfitImages(outfit);
   renderLookWeather(
     currentSelection?.weather,
     currentOutfit?.weather_details,
@@ -1616,6 +1643,7 @@ function renderLocalizedOutfit(outfit) {
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
   document.getElementById("weatherOutfit").textContent = outfit.weather_outfit || "";
   document.getElementById("weatherOutfitBox").hidden = !outfit.weather_outfit;
+  renderWeatherOutfitImages(outfit);
   renderColorCombinations();
 }
 
