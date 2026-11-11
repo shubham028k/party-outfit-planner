@@ -4,15 +4,11 @@ const saveMessage = document.getElementById("saveMessage");
 const saveButton = document.getElementById("saveButton");
 const resultPlaceholder = document.getElementById("resultPlaceholder");
 const outfitResult = document.getElementById("outfitResult");
-const locationInput = document.getElementById("location");
-const eventDateInput = document.getElementById("eventDate");
-const eventSummary = document.getElementById("eventSummary");
-const routeButton = document.getElementById("routeButton");
-const routeMessage = document.getElementById("routeMessage");
-const routeMapElement = document.getElementById("routeMap");
-const routeSummary = document.getElementById("routeSummary");
-let currentEventLocation = "";
-let routeMapInstance = null;
+const partySearchInput = document.getElementById("partySearch");
+const weatherInput = document.getElementById("weatherInput");
+const wardrobeSearch = document.getElementById("wardrobeSearch");
+const wardrobeSearchEmpty = document.getElementById("wardrobeSearchEmpty");
+let wardrobeItemsCache = [];
 
 async function readJsonResponse(response) {
   const contentType = (response.headers.get("content-type") || "").toLowerCase();
@@ -50,17 +46,6 @@ let wardrobeImagePreviewUrl = null;
 
 let currentSelection = null;
 let currentOutfit = null;
-let currentEvent = null;
-
-const today = new Date();
-const maxForecastDate = new Date(today);
-maxForecastDate.setDate(maxForecastDate.getDate() + 15);
-const toDateInputValue = (date) => {
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return localDate.toISOString().slice(0, 10);
-};
-eventDateInput.min = toDateInputValue(today);
-eventDateInput.max = toDateInputValue(maxForecastDate);
 
 form.addEventListener("input", invalidateCurrentLook);
 form.addEventListener("change", invalidateCurrentLook);
@@ -92,6 +77,13 @@ const wardrobeAudienceNames = {
   children: "बच्चे",
   senior: "बुज़ुर्ग",
   all: "सबके लिए"
+};
+
+const wardrobeWeatherNames = {
+  any: ["सभी मौसम", "All weather"],
+  warm: ["गर्मी", "Warm"],
+  cold: ["ठंड", "Cold"],
+  rainy: ["बारिश", "Rainy"]
 };
 
 const colorCombinationIdeas = [
@@ -338,7 +330,7 @@ updateWardrobeSizeField();
 
 function translateVisibleMessages() {
   document.querySelectorAll(
-    "#errorMessage, #saveMessage, #routeMessage, #wardrobeMessage"
+    "#errorMessage, #saveMessage, #wardrobeMessage"
   ).forEach((element) => {
     element.textContent = translateText(element.textContent);
   });
@@ -350,10 +342,10 @@ form.addEventListener("submit", async (event) => {
   saveMessage.textContent = "";
 
   const selection = {
-    party_type: document.getElementById("partyType").value,
-    event_date: eventDateInput.value,
-    location: locationInput.value.trim(),
-    audience: document.getElementById("audience").value
+    party_name: partySearchInput.value.trim(),
+    weather_name: weatherInput.value.trim(),
+    audience: document.getElementById("audience").value,
+    language: appLanguage
   };
   currentSelection = null;
   currentOutfit = null;
@@ -378,12 +370,6 @@ form.addEventListener("submit", async (event) => {
 
     currentSelection = data.selection;
     saveButton.disabled = false;
-    showEventSummary({
-      party_type: currentSelection.party_type,
-      event_date: currentSelection.event_date,
-      location: currentSelection.location,
-      weather: data.outfit.weather_details
-    });
     showOutfit(data.outfit);
   } catch (error) {
     errorMessage.textContent = translateText(error.message);
@@ -409,6 +395,7 @@ function showOutfit(outfit) {
   document.getElementById("outfitAccessory").textContent = outfit.accessory;
   document.getElementById("outfitEyewear").textContent = outfit.eyewear || "—";
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
+  renderLookWeather(currentSelection?.weather);
   const imageFields = {
     outfitTopImage: "top",
     outfitBottomImage: "bottom",
@@ -463,6 +450,18 @@ function updateOutfitItemLabels(audience, outfitType) {
   });
 }
 
+function renderLookWeather(weather) {
+  const element = document.getElementById("lookWeather");
+  if (!element || !weather) return;
+  const labels = {
+    warm: ["गर्मी", "Warm"],
+    cold: ["ठंड", "Cold"],
+    rainy: ["बारिश", "Rainy"]
+  };
+  const label = labels[weather]?.[appLanguage === "en" ? 1 : 0] || weather;
+  element.textContent = appLanguage === "en" ? `Weather: ${label}` : `मौसम: ${label}`;
+}
+
 saveButton.addEventListener("click", async () => {
   if (!currentSelection) {
     saveMessage.textContent = translateText("पहले अपना लुक बनाओ।");
@@ -504,6 +503,7 @@ wardrobeForm.addEventListener("submit", async (event) => {
   formData.set("color", document.getElementById("wardrobeColor").value.trim());
   formData.set("audience", document.getElementById("wardrobeAudience").value);
   formData.set("size", wardrobeSize.value);
+  formData.set("weather", document.getElementById("wardrobeWeather").value);
   if (wardrobeImageInput.files[0]) {
     formData.set("image", wardrobeImageInput.files[0]);
   }
@@ -546,20 +546,43 @@ async function loadWardrobe() {
       throw new Error(data.error || "अलमारी लोड नहीं हो पाई।");
     }
 
-    wardrobeList.replaceChildren();
-    wardrobeCount.textContent = data.items.length;
-    emptyWardrobe.hidden = data.items.length > 0;
-
-    for (const item of data.items) {
-      wardrobeList.appendChild(createWardrobeCard(item));
-    }
+    wardrobeItemsCache = Array.isArray(data.items) ? data.items : [];
+    wardrobeCount.textContent = wardrobeItemsCache.length;
+    emptyWardrobe.hidden = wardrobeItemsCache.length > 0;
+    renderWardrobeItems();
   } catch (error) {
+    wardrobeItemsCache = [];
     wardrobeList.replaceChildren();
     emptyWardrobe.hidden = false;
     emptyWardrobe.textContent = translateText(error.message);
+    wardrobeSearchEmpty.hidden = true;
   }
   translateCards();
 }
+
+function renderWardrobeItems() {
+  const query = wardrobeSearch.value.trim().toLocaleLowerCase();
+  const matchingItems = wardrobeItemsCache.filter((item) => {
+    const searchableText = [
+      item.name,
+      item.color,
+      item.category,
+      categoryNames[item.category],
+      item.audience,
+      wardrobeAudienceNames[item.audience],
+      ...(wardrobeWeatherNames[item.weather] || [])
+    ].filter(Boolean).join(" ").toLocaleLowerCase();
+    return !query || searchableText.includes(query);
+  });
+
+  wardrobeList.replaceChildren(
+    ...matchingItems.map((item) => createWardrobeCard(item))
+  );
+  emptyWardrobe.hidden = wardrobeItemsCache.length > 0;
+  wardrobeSearchEmpty.hidden = !query || matchingItems.length > 0;
+}
+
+wardrobeSearch.addEventListener("input", renderWardrobeItems);
 
 function createWardrobeCard(item) {
   const card = document.createElement("article");
@@ -575,9 +598,12 @@ function createWardrobeCard(item) {
   const size = item.size && item.size !== "any"
     ? ` · ${translateText("साइज़")} ${item.size}`
     : "";
+  const weather = item.weather && item.weather !== "any"
+    ? ` · ${translateText("मौसम")}: ${wardrobeWeatherNames[item.weather]?.[appLanguage === "en" ? 1 : 0] || item.weather}`
+    : "";
   details.textContent = color
-    ? `${audience} · ${category} · ${color}${size}`
-    : `${audience} · ${category}${size}`;
+    ? `${audience} · ${category} · ${color}${size}${weather}`
+    : `${audience} · ${category}${size}${weather}`;
 
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
@@ -1062,6 +1088,8 @@ const englishText = {
   "इस जगह का मौसम अभी नहीं मिल पाया। जगह जाँचें और फिर कोशिश करें।": "The weather for this location could not be retrieved. Check the location and try again.",
   "पार्टी, तारीख, जगह और किसके लिए लुक है—ये जानकारी भरें।": "Enter the occasion, date, location, and who the look is for.",
   "पार्टी की जानकारी सही नहीं है।": "The party details are invalid.",
+  "पार्टी का नाम, मौसम और किसके लिए लुक है—ये जानकारी जाँचें।": "Check the party name, weather, and who the look is for.",
+  "कपड़े के लिए सही मौसम चुनें।": "Choose a valid weather condition for this item.",
   "Map की जानकारी सही नहीं है।": "The map details are invalid.",
   "Map के लिए जगह और current location जाँचें।": "Check the venue and current location for the map.",
   "तुमने जानकारी बदली है; लुक फिर से बनाओ।": "You changed the details; create the look again.",
@@ -1072,6 +1100,7 @@ const englishText = {
   "पार्टी / समारोह": "Party / celebration",
 
   "शर्ट / टॉप": "Shirt / top", "पैंट": "Pants", "जूते": "Shoes",
+  "मौसम": "Weather", "सभी मौसम": "All weather",
   "एक्सेसरी": "Accessory", "कपड़े का नाम": "Item name",
   "कपड़े का प्रकार": "Item type", "किसकी अलमारी?": "Whose wardrobe?",
   "कपड़े का नाम लिखें (अधिकतम 60 अक्षर)।": "Enter an item name (up to 60 characters).",
@@ -1183,13 +1212,22 @@ function setOption(selector, english) {
   setEnglish(selector, english);
 }
 
+function setDatalistOptions(id, hindiValues, englishValues) {
+  const list = document.getElementById(id);
+  const values = appLanguage === "en" ? englishValues : hindiValues;
+  list.replaceChildren(...values.map((value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    return option;
+  }));
+}
+
 function applyPageLanguage() {
   if (!languageSelect) return;
 
   appLanguage = languageSelect.value;
   localStorage.setItem("lookbook-language", appLanguage);
   document.documentElement.lang = appLanguage;
-  if (currentEvent) renderEventSummary(currentEvent);
 
   setEnglish(
     ".topbar-note",
@@ -1200,26 +1238,25 @@ function applyPageLanguage() {
   setEnglish(".topbar-actions .logout-button", "Log out");
   setEnglish(".hero-copy .eyebrow", "YOUR PLAN, YOUR STYLE", false, "तुम्हारी अलमारी, तुम्हारा स्टाइल");
   setEnglish(".hero h1", "Your wardrobe,<br><span>your next look.</span>", true);
-  setEnglish(".hero-description", "Enter your party date and location. Get a weather-aware look using items and photos saved in your wardrobe.");
+  setEnglish(".hero-description", "Add clothing photos to your digital wardrobe. Search for a party, enter the weather, and get a look from your saved clothes.");
   setEnglish(".hero-tag", "LOOK GOOD.<br>FEEL GREAT.", true, "अच्छे दिखो।<br>खुश महसूस करो।");
 
   setEnglish("#plannerTitle", "Tell us about the party");
-  setEnglish(".event-summary .eyebrow", "YOUR EVENT");
-  setEnglish("#routeButton span", "Show route from my location");
-  setEnglish('label[for="partyType"]', "What kind of party?");
-  setEnglish('label[for="eventDate"]', "Party date");
-  setEnglish("#eventDateNote", "Weather forecasts are available for the next 16 days.");
+  setEnglish('label[for="partySearch"]', "Search party name");
+  setEnglish("#partySearch", "e.g. wedding, birthday, or night party");
+  setEnglish('label[for="weatherInput"]', "Enter the weather");
+  setEnglish("#weatherInput", "e.g. warm, cold, or rainy");
   setEnglish('label[for="audience"]', "Who is the look for?");
-  setEnglish('label[for="location"]', "Party venue / city");
-  setEnglish("#location", "e.g. Jaipur or venue name");
-  setEnglish(
-    "#locationPrivacyNote",
-    "The venue is sent to OpenStreetMap and Open-Meteo for weather. A route is created only with your permission."
+  setDatalistOptions(
+    "partySuggestions",
+    ["शादी की पार्टी", "बर्थडे पार्टी", "कैज़ुअल पार्टी", "नाइट पार्टी"],
+    ["Wedding party", "Birthday party", "Casual party", "Night party"]
   );
-  setOption('#partyType option[value="birthday"]', "🎂 Birthday party");
-  setOption('#partyType option[value="wedding"]', "💐 Wedding party");
-  setOption('#partyType option[value="casual"]', "🎈 Party / celebration");
-  setOption('#partyType option[value="night"]', "🌙 Night party");
+  setDatalistOptions(
+    "weatherSuggestions",
+    ["गर्मी", "ठंड", "बारिश"],
+    ["Warm", "Cold", "Rainy"]
+  );
   setOption('#audience option[value="men"]', "Men");
   setOption('#audience option[value="women"]', "Women");
   setOption('#audience option[value="children"]', "Children");
@@ -1230,7 +1267,7 @@ function applyPageLanguage() {
 
   setEnglish(".result-panel .eyebrow", "MADE FOR YOUR PLAN", false, "तुम्हारे प्लान के लिए");
   setEnglish(".result-panel h2", "Your look");
-  setEnglish("#resultPlaceholder p", "Enter your party details.<br>Your look will appear here.", true);
+  setEnglish("#resultPlaceholder p", "Search for a party and enter the weather.<br>Your wardrobe look will appear here.", true);
   setEnglish("#designIdea .eyebrow", "DESIGN INSPIRATION", false, "डिज़ाइन की झलक");
   setEnglish("#colorIdeasTitle", "Clothing and shoe color combinations");
   setEnglish("#saveButton span", "Save this look");
@@ -1243,9 +1280,13 @@ function applyPageLanguage() {
 
   setEnglish(".wardrobe-section .eyebrow", "MY CLOSET", false, "मेरी अलमारी");
   setEnglish(".wardrobe-section h2", "My wardrobe");
+  setEnglish('label[for="wardrobeSearch"]', "Search your wardrobe");
+  setEnglish("#wardrobeSearch", "shirt, pants, shoes, watch…");
+  setEnglish("#wardrobeSearchEmpty", "No matching clothing item was found.");
   setEnglish('label[for="wardrobeName"]', "Item name");
   setEnglish('label[for="wardrobeCategory"]', "Item type");
   setEnglish('label[for="wardrobeAudience"]', "Who is this item for?");
+  setEnglish('label[for="wardrobeWeather"]', "Suitable weather");
   setEnglish('label[for="wardrobeColor"]', "Color (optional)");
   setEnglish("#wardrobeName", "e.g. Oxford shirt");
   setEnglish("#wardrobeColor", "e.g. Navy blue");
@@ -1265,8 +1306,13 @@ function applyPageLanguage() {
   setOption('#wardrobeAudience option[value="children"]', "Children");
   setOption('#wardrobeAudience option[value="senior"]', "Older adult");
   setOption('#wardrobeAudience option[value="all"]', "Everyone");
+  setOption('#wardrobeWeather option[value="any"]', "All weather");
+  setOption('#wardrobeWeather option[value="warm"]', "Warm");
+  setOption('#wardrobeWeather option[value="cold"]', "Cold");
+  setOption('#wardrobeWeather option[value="rainy"]', "Rainy");
   setEnglish('label[for="wardrobeImage"]', "Clothing photo (optional)");
   setEnglish(".wardrobe-image-field > small", "JPG, PNG, or WebP · up to 5 MB");
+  setEnglish("#wardrobePhotoNote", "This photo is saved with the item in your wardrobe and shown with its look.");
   setEnglish("#removeWardrobeImage", "Remove photo");
   const wardrobeImageAlt = document.getElementById("wardrobeImagePreview");
   if (wardrobeImageAlt) {
@@ -1460,166 +1506,6 @@ if (languageSelect) {
   languageSelect.addEventListener("change", applyPageLanguage);
   applyPageLanguage();
 }
-function showEventSummary(event) {
-  currentEvent = event;
-  currentEventLocation = event.location;
-  renderEventSummary(event);
-  eventSummary.hidden = false;
-  routeButton.disabled = !event.location;
-  routeMessage.textContent = "";
-  routeSummary.hidden = true;
-  routeMapElement.hidden = true;
-  if (routeMapInstance) {
-    routeMapInstance.remove();
-    routeMapInstance = null;
-  }
-}
-
-function renderEventSummary(event) {
-  document.getElementById("eventName").textContent =
-    translateText(partyNames[event.party_type] || event.party_type);
-  const start = new Date(`${event.event_date}T12:00:00`);
-  document.getElementById("eventTime").textContent =
-    Number.isNaN(start.getTime())
-      ? event.event_date
-      : start.toLocaleString(appLanguage === "en" ? "en" : "hi-IN", {
-        dateStyle: "full"
-      });
-  document.getElementById("eventLocation").textContent =
-    event.location;
-  const weather = event.weather;
-  document.getElementById("eventWeather").textContent = weather
-    ? formatWeather(weather)
-    : "";
-}
-
-const partyNames = {
-  wedding: "शादी की पार्टी",
-  birthday: "बर्थडे पार्टी",
-  casual: "कैज़ुअल पार्टी",
-  night: "नाइट पार्टी"
-};
-
-function formatWeather(weather) {
-  const conditions = {
-    warm: ["गर्म / साफ़", "Warm / clear"],
-    cold: ["ठंडा", "Cold"],
-    rainy: ["बारिश की संभावना", "Chance of rain"]
-  };
-  const condition = conditions[weather.condition]?.[appLanguage === "en" ? 1 : 0]
-    || weather.condition;
-  const numberFormat = new Intl.NumberFormat(
-    appLanguage === "en" ? "en" : "hi-IN",
-    { maximumFractionDigits: 0 }
-  );
-  const min = numberFormat.format(weather.temperature_min);
-  const max = numberFormat.format(weather.temperature_max);
-  const rain = numberFormat.format(weather.precipitation_probability);
-  return appLanguage === "en"
-    ? `${condition} · ${min}–${max}°C · ${rain}% rain chance`
-    : `${condition} · ${min}–${max}°C · बारिश की संभावना ${rain}%`;
-}
-
-function showRouteOnMap(route, origin) {
-  if (!window.L) throw new Error("Map library load नहीं हुई। पेज refresh करके फिर कोशिश करें।");
-  routeMapElement.hidden = false;
-  routeSummary.hidden = false;
-  routeMapInstance = L.map(routeMapElement);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors"
-  }).addTo(routeMapInstance);
-  const routeLayer = L.geoJSON({
-    type: "Feature",
-    properties: {},
-    geometry: route.geometry
-  }, {
-    style: { color: "#ff8fb3", weight: 5, opacity: 0.9 }
-  }).addTo(routeMapInstance);
-  const destination = [
-    route.destination.latitude,
-    route.destination.longitude
-  ];
-  L.marker([origin.latitude, origin.longitude])
-    .addTo(routeMapInstance)
-    .bindPopup(appLanguage === "en" ? "Your location" : "आपकी जगह");
-  L.marker(destination)
-    .addTo(routeMapInstance)
-    .bindPopup(currentEventLocation);
-  const bounds = routeLayer.getBounds().extend(destination).extend([
-    origin.latitude,
-    origin.longitude
-  ]);
-  routeMapInstance.fitBounds(bounds.pad(0.12));
-  const distance = new Intl.NumberFormat(
-    appLanguage === "en" ? "en" : "hi-IN",
-    { maximumFractionDigits: 1 }
-  ).format(route.distance_meters / 1000);
-  const minutes = Math.round(route.duration_seconds / 60);
-  routeSummary.textContent = appLanguage === "en"
-    ? `Driving route: ${distance} km · about ${minutes} min`
-    : `सड़क मार्ग: ${distance} km · लगभग ${minutes} मिनट`;
-}
-
-async function requestEventRoute(position) {
-  const origin = {
-    latitude: position.coords.latitude,
-    longitude: position.coords.longitude
-  };
-  const response = await fetch("/api/route", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      location: currentEventLocation,
-      ...origin
-    })
-  });
-  const data = await readJsonResponse(response);
-  if (!response.ok) throw new Error(data.error || "Map route नहीं बन पाया।");
-  showRouteOnMap(data, origin);
-}
-
-routeButton.addEventListener("click", () => {
-  routeMessage.textContent = "";
-  if (!navigator.geolocation) {
-    routeMessage.textContent = appLanguage === "en"
-      ? "This browser does not support location access."
-      : "इस browser में location की सुविधा उपलब्ध नहीं है।";
-    return;
-  }
-  routeButton.disabled = true;
-  routeButton.querySelector("span").textContent =
-    appLanguage === "en" ? "Finding route…" : "रास्ता खोज रहे हैं…";
-  navigator.geolocation.getCurrentPosition(
-    async (position) => {
-      try {
-        await requestEventRoute(position);
-      } catch (error) {
-        routeMessage.textContent = translateText(error.message);
-      } finally {
-        routeButton.disabled = !currentEventLocation;
-        routeButton.querySelector("span").textContent = translateText(
-          "मेरी जगह से रास्ता दिखाओ"
-        );
-      }
-    },
-    (error) => {
-      routeMessage.textContent = error.code === error.PERMISSION_DENIED
-        ? (appLanguage === "en"
-          ? "Location permission was denied. Allow it in your browser and retry."
-          : "Location की अनुमति नहीं मिली। Browser में अनुमति देकर फिर कोशिश करें।")
-        : (appLanguage === "en"
-          ? "Could not read your current location. Retry when location is available."
-          : "आपकी current location नहीं मिल पाई। उपलब्ध होने पर फिर कोशिश करें।");
-      routeButton.disabled = !currentEventLocation;
-      routeButton.querySelector("span").textContent = translateText(
-        "मेरी जगह से रास्ता दिखाओ"
-      );
-    },
-    { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
-  );
-});
-
 async function loadBuiltinCatalog() {
   const catalogElement = document.getElementById("builtinCatalog");
   try {

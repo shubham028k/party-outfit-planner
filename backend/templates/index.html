@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#17152b">
   <title>पार्टी आउटफिट प्लानर · LOOKBOOK</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -37,7 +36,7 @@
           <p class="eyebrow">YOUR PLAN, YOUR STYLE</p>
           <h1>आपकी अलमारी,<br><span>आपका अगला लुक।</span></h1>
           <p class="hero-description">
-            पार्टी की तारीख और जगह डालें। अलमारी में दर्ज कपड़ों और उनकी photos से पूरा लुक पाएँ।
+            अपनी डिजिटल अलमारी में कपड़ों की photos जोड़ें। पार्टी और मौसम चुनें—लुक आपकी अलमारी से बनेगा।
           </p>
         </div>
         <div class="hero-art" aria-hidden="true">
@@ -47,114 +46,6 @@
           <span class="sparkle sparkle-one">✦</span>
           <span class="sparkle sparkle-two">✧</span>
           <span class="hero-tag">LOOK GOOD.<br>FEEL GREAT.</span>
-        </div>
-      </section>
-
-      <section class="planner-grid">
-        <section class="panel form-panel" aria-labelledby="plannerTitle">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">YOUR NEXT EVENT</p>
-              <h2 id="plannerTitle">अपनी पार्टी बताओ</h2>
-            </div>
-            <span class="step-badge">01</span>
-          </div>
-          <form id="outfitForm">
-            <label for="partyType">किस तरह की पार्टी है?</label>
-            <select id="partyType" name="party_type" required>
-              <option value="wedding">💐 शादी की पार्टी</option>
-              <option value="birthday">🎂 बर्थडे पार्टी</option>
-              <option value="casual">🎈 पार्टी / समारोह</option>
-              <option value="night">🌙 नाइट पार्टी</option>
-            </select>
-
-            <label for="eventDate">पार्टी की तारीख</label>
-            <input id="eventDate" name="event_date" type="date" required>
-            <p id="eventDateNote" class="location-privacy-note">
-              मौसम का अनुमान अगले 16 दिनों तक उपलब्ध है।
-            </p>
-
-            <label for="location">पार्टी की जगह / शहर</label>
-            <input id="location" name="location" type="text" maxlength="100"
-                   autocomplete="address-level2" placeholder="जैसे: जयपुर या venue का नाम" required>
-            <p id="locationPrivacyNote" class="location-privacy-note">
-              मौसम के लिए जगह OpenStreetMap और Open-Meteo को भेजी जाएगी। रास्ता सिर्फ़ आपकी अनुमति से बनेगा।
-            </p>
-
-            <label for="audience">लुक किसके लिए है?</label>
-            <select id="audience" name="audience" required>
-              <option value="men">पुरुष</option>
-              <option value="women">महिला</option>
-              <option value="children">बच्चे</option>
-              <option value="senior">बुज़ुर्ग</option>
-            </select>
-            <button class="primary-button" type="submit">
-              <span>मेरी अलमारी से लुक सुझाओ</span><span aria-hidden="true">↗</span>
-            </button>
-            <p id="errorMessage" class="error-message" role="alert"></p>
-          </form>
-          <div id="eventSummary" class="event-summary" hidden>
-            <div>
-              <p class="eyebrow">YOUR EVENT</p>
-              <h3 id="eventName"></h3>
-              <p id="eventTime" class="event-time"></p>
-              <p id="eventLocation" class="event-time"></p>
-              <p id="eventWeather" class="event-time"></p>
-            </div>
-            <button id="routeButton" class="secondary-button" type="button">
-              ⌖ <span>मेरी जगह से रास्ता दिखाओ</span>
-            </button>
-          </div>
-          <p id="routeMessage" class="save-message" aria-live="polite"></p>
-          <p id="routeSummary" class="route-summary" hidden></p>
-          <div id="routeMap" class="route-map" role="region" aria-label="कार्यक्रम तक का नक्शा" hidden></div>
-        </section>
-
-        <div class="panel result-panel" id="resultPanel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">MADE FOR YOUR PLAN</p>
-              <h2>तुम्हारा लुक</h2>
-            </div>
-            <span class="step-badge">02</span>
-          </div>
-
-          <div id="resultPlaceholder" class="result-placeholder">
-            <span class="placeholder-icon">✧</span>
-            <p>अपनी पार्टी की जानकारी भरो।<br>तुम्हारा लुक यहाँ दिखाई देगा।</p>
-          </div>
-
-          <div id="outfitResult" class="outfit-result" hidden>
-            <div class="look-label">
-              <span id="partyName"></span>
-              <span id="styleName"></span>
-            </div>
-            <div class="outfit-items">
-              <div class="outfit-item"><span class="outfit-visual">👕<img id="outfitTopImage" alt="" hidden></span><div><small>ऊपर</small><strong id="outfitTop"></strong></div></div>
-              <div class="outfit-item"><span class="outfit-visual">👖<img id="outfitBottomImage" alt="" hidden></span><div><small>नीचे</small><strong id="outfitBottom"></strong></div></div>
-              <div class="outfit-item"><span class="outfit-visual">👟<img id="outfitShoesImage" alt="" hidden></span><div><small>जूते</small><strong id="outfitShoes"></strong></div></div>
-              <div class="outfit-item"><span class="outfit-visual">⌚<img id="outfitAccessoryImage" alt="" hidden></span><div><small>एक्सेसरी</small><strong id="outfitAccessory"></strong></div></div>
-              <div class="outfit-item"><span class="outfit-visual">👓<img id="outfitEyewearImage" alt="" hidden></span><div><small>चश्मा</small><strong id="outfitEyewear"></strong></div></div>
-            </div>
-            <p id="outfitLanguageStatus" class="outfit-language-status" aria-live="polite" hidden></p>
-            <section id="designIdea" class="design-idea" aria-labelledby="designIdeaTitle" hidden>
-              <div id="designVisual" class="design-visual"></div>
-              <div class="design-copy">
-                <p class="eyebrow">DESIGN INSPIRATION</p>
-                <h3 id="designIdeaTitle"></h3>
-                <p id="designDetails"></p>
-              </div>
-            </section>
-            <div class="weather-tip"><span>✦</span><p id="weatherTip"></p></div>
-            <section class="color-ideas" aria-labelledby="colorIdeasTitle">
-              <h3 id="colorIdeasTitle">कपड़ों और जूतों के रंगों के मेल</h3>
-              <div id="colorCombinationList" class="color-combination-list"></div>
-            </section>
-            <button id="saveButton" class="secondary-button" type="button">
-              ♡ <span>इस लुक को सेव करो</span>
-            </button>
-            <p id="saveMessage" class="save-message" aria-live="polite"></p>
-          </div>
         </div>
       </section>
 
@@ -226,11 +117,24 @@
             </select>
           </div>
 
+          <div>
+            <label for="wardrobeWeather">किस मौसम में पहनें?</label>
+            <select id="wardrobeWeather">
+              <option value="any">सभी मौसम</option>
+              <option value="warm">गर्मी</option>
+              <option value="cold">ठंड</option>
+              <option value="rainy">बारिश</option>
+            </select>
+          </div>
+
           <div class="wardrobe-image-field">
             <label for="wardrobeImage">कपड़े की फोटो (वैकल्पिक)</label>
             <input id="wardrobeImage" name="image" type="file"
                    accept="image/jpeg,image/png,image/webp">
             <small>JPG, PNG या WebP · अधिकतम 5 MB</small>
+            <small id="wardrobePhotoNote" class="wardrobe-photo-note">
+              यह फोटो तुम्हारी अलमारी में सेव होगी और लुक में दिखाई देगी।
+            </small>
             <div id="wardrobeImagePreviewBox" class="wardrobe-image-preview" hidden>
               <img id="wardrobeImagePreview" alt="कपड़े की फोटो का preview">
               <button id="removeWardrobeImage" type="button" class="text-button">
@@ -243,6 +147,12 @@
         </form>
 
         <p id="wardrobeMessage" class="save-message" aria-live="polite"></p>
+        <label class="wardrobe-search-label" for="wardrobeSearch">अलमारी में कपड़ा खोजें</label>
+        <input id="wardrobeSearch" class="wardrobe-search"
+               type="search" placeholder="शर्ट, पैंट, जूते, घड़ी…" autocomplete="off">
+        <p id="wardrobeSearchEmpty" class="empty-history" hidden>
+          इस नाम से अलमारी में कोई कपड़ा नहीं मिला।
+        </p>
         <details class="catalog-details">
           <summary>LOOKBOOK के अंदर का sample कपड़ों का catalog देखें</summary>
           <p class="catalog-privacy-note">
@@ -259,6 +169,102 @@
           अभी अलमारी खाली है। ऊपर से अपने कपड़े जोड़ो।
         </p>
       </section>
+
+      <section class="planner-grid">
+        <section class="panel form-panel" aria-labelledby="plannerTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">YOUR NEXT EVENT</p>
+              <h2 id="plannerTitle">अपनी पार्टी बताओ</h2>
+            </div>
+            <span class="step-badge">01</span>
+          </div>
+          <form id="outfitForm">
+            <label for="partySearch">पार्टी का नाम खोजें</label>
+            <input id="partySearch" class="planner-input" name="party_name"
+                   list="partySuggestions" maxlength="60" autocomplete="off"
+                   placeholder="जैसे: शादी, जन्मदिन या नाइट पार्टी" required>
+            <datalist id="partySuggestions">
+              <option value="शादी की पार्टी"></option>
+              <option value="बर्थडे पार्टी"></option>
+              <option value="कैज़ुअल पार्टी"></option>
+              <option value="नाइट पार्टी"></option>
+            </datalist>
+
+            <label for="weatherInput">मौसम लिखें</label>
+            <input id="weatherInput" class="planner-input" name="weather_name"
+                   list="weatherSuggestions" maxlength="40" autocomplete="off"
+                   placeholder="गर्मी, ठंड या बारिश" required>
+            <datalist id="weatherSuggestions">
+              <option value="गर्मी"></option>
+              <option value="ठंड"></option>
+              <option value="बारिश"></option>
+            </datalist>
+
+            <label for="audience">लुक किसके लिए है?</label>
+            <select id="audience" name="audience" required>
+              <option value="men">पुरुष</option>
+              <option value="women">महिला</option>
+              <option value="children">बच्चे</option>
+              <option value="senior">बुज़ुर्ग</option>
+            </select>
+            <button class="primary-button" type="submit">
+              <span>मेरी अलमारी से लुक सुझाओ</span><span aria-hidden="true">↗</span>
+            </button>
+            <p id="errorMessage" class="error-message" role="alert"></p>
+          </form>
+        </section>
+
+        <div class="panel result-panel" id="resultPanel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">MADE FOR YOUR PLAN</p>
+              <h2>तुम्हारा लुक</h2>
+            </div>
+            <span class="step-badge">02</span>
+          </div>
+
+          <div id="resultPlaceholder" class="result-placeholder">
+            <span class="placeholder-icon">✧</span>
+            <p>अपनी पार्टी की जानकारी भरो।<br>तुम्हारा लुक यहाँ दिखाई देगा।</p>
+          </div>
+
+          <div id="outfitResult" class="outfit-result" hidden>
+            <div class="look-label">
+              <span id="partyName"></span>
+              <span id="styleName"></span>
+            </div>
+            <p id="lookWeather" class="look-weather"></p>
+            <div class="outfit-items">
+              <div class="outfit-item"><span class="outfit-visual">👕<img id="outfitTopImage" alt="" hidden></span><div><small>ऊपर</small><strong id="outfitTop"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">👖<img id="outfitBottomImage" alt="" hidden></span><div><small>नीचे</small><strong id="outfitBottom"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">👟<img id="outfitShoesImage" alt="" hidden></span><div><small>जूते</small><strong id="outfitShoes"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">⌚<img id="outfitAccessoryImage" alt="" hidden></span><div><small>एक्सेसरी</small><strong id="outfitAccessory"></strong></div></div>
+              <div class="outfit-item"><span class="outfit-visual">👓<img id="outfitEyewearImage" alt="" hidden></span><div><small>चश्मा</small><strong id="outfitEyewear"></strong></div></div>
+            </div>
+            <p id="outfitLanguageStatus" class="outfit-language-status" aria-live="polite" hidden></p>
+            <section id="designIdea" class="design-idea" aria-labelledby="designIdeaTitle" hidden>
+              <div id="designVisual" class="design-visual"></div>
+              <div class="design-copy">
+                <p class="eyebrow">DESIGN INSPIRATION</p>
+                <h3 id="designIdeaTitle"></h3>
+                <p id="designDetails"></p>
+              </div>
+            </section>
+            <div class="weather-tip"><span>✦</span><p id="weatherTip"></p></div>
+            <section class="color-ideas" aria-labelledby="colorIdeasTitle">
+              <h3 id="colorIdeasTitle">कपड़ों और जूतों के रंगों के मेल</h3>
+              <div id="colorCombinationList" class="color-combination-list"></div>
+            </section>
+            <button id="saveButton" class="secondary-button" type="button">
+              ♡ <span>इस लुक को सेव करो</span>
+            </button>
+            <p id="saveMessage" class="save-message" aria-live="polite"></p>
+          </div>
+        </div>
+      </section>
+
+
 
       <section class="saved-section">
         <div class="saved-heading">
@@ -281,7 +287,6 @@
     </footer>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

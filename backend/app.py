@@ -17,7 +17,6 @@ import uuid
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from dateutil.rrule import rrulestr
 from io import BytesIO
-import base64
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
@@ -387,6 +386,7 @@ CATEGORIES = {
 WARDROBE_AUDIENCES = {
     "men", "women", "adult", "children", "senior", "all"
 }
+WARDROBE_WEATHER = {"any", "warm", "cold", "rainy"}
 APPAREL_CATEGORIES = {
     "top", "bottom", "shorts", "saree", "salwar", "lehenga", "kurti"
 }
@@ -484,228 +484,6 @@ def api_json_errors(function):
             }), 500
 
     return wrapper
-
-
-@app.post("/api/analyze-photo")
-@api_json_errors
-@login_required
-def analyze_photo():
-    groq_api_key = os.environ.get("GROQ_API_KEY")
-    if not groq_api_key:
-        return jsonify({"error": "GROQ_API_KEY सेट नहीं है।"}), 503
-
-    photo = request.files.get("photo")
-    party = request.form.get("party_type")
-    weather = request.form.get("weather")
-    style = request.form.get("style")
-    audience = request.form.get("audience")
-    bottom_preference = request.form.get("bottom_preference", "trousers")
-    size_preference = request.form.get("size_preference", "any")
-    location = request.form.get("location", "").strip()
-    outfit_type = request.form.get("outfit_type", "any")
-    language = request.form.get("language", "hi")
-
-    if request.form.get("photo_consent") != "yes":
-        return jsonify({"error": "फोटो विश्लेषण के लिए अनुमति दें।"}), 400
-
-    if not photo or not photo.filename:
-        return jsonify({"error": "पहले अपनी फोटो चुनें।"}), 400
-
-    if (
-        party not in PARTY_NAMES
-        or weather not in {"warm", "cold", "rainy"}
-        or style not in STYLE_NAMES
-        or audience not in AUDIENCE_NAMES
-        or bottom_preference not in BOTTOM_NAMES
-        or not isinstance(size_preference, str)
-        or size_preference not in CLOTHING_SIZES
-        or len(location) > 100
-        or not isinstance(outfit_type, str)
-        or outfit_type not in OUTFIT_TYPES
-    ):
-        return jsonify({"error": "पार्टी, मौसम, स्टाइल और कपड़ों के विकल्प जाँचें।"}), 400
-
-    raw_image = photo.read(5 * 1024 * 1024 + 1)
-    if len(raw_image) > 5 * 1024 * 1024:
-        return jsonify({"error": "फोटो 5 MB से छोटी होनी चाहिए।"}), 400
-
-    try:
-        image = Image.open(BytesIO(raw_image))
-        if image.format not in {"JPEG", "PNG", "WEBP"}:
-            return jsonify({"error": "JPG, PNG या WebP फोटो चुनें।"}), 400
-
-        image.verify()
-        image = Image.open(BytesIO(raw_image)).convert("RGB")
-        image.thumbnail((1200, 1200))
-
-        cleaned_image = BytesIO()
-        image.save(cleaned_image, format="JPEG", quality=85)
-        image_base64 = base64.b64encode(
-            cleaned_image.getvalue()
-        ).decode("utf-8")
-
-    except (UnidentifiedImageError, OSError, ValueError):
-        return jsonify({"error": "यह सही फोटो फ़ाइल नहीं लगती।"}), 400
-
-    wardrobe_audiences = wardrobe_audience_options(audience)
-    audience_placeholders = ", ".join("?" for _ in wardrobe_audiences)
-    with connect_db() as connection:
-        items = connection.execute(
-            f"""SELECT name, category, color, size
-               FROM wardrobe_items
-               WHERE user_id = ?
-                 AND audience IN ({audience_placeholders}, 'all')
-                 AND (
-                    ? = 'any'
-                    OR category NOT IN ('top', 'bottom', 'shorts')
-                    OR size IN (?, 'any')
-                 )
-               ORDER BY CASE WHEN audience = ? THEN 0
-                             WHEN audience = 'adult' THEN 1 ELSE 2 END,
-                        CASE WHEN category IN ('top', 'bottom', 'shorts')
-                                  AND ? != 'any' AND size = ? THEN 0
-                             WHEN category IN ('top', 'bottom', 'shorts')
-                                  AND ? != 'any' AND size = 'any' THEN 1
-                             ELSE 0 END,
-                        id DESC
-               LIMIT 50""",
-            (
-                session["user_id"],
-                *wardrobe_audiences,
-                audience,
-                size_preference,
-                size_preference,
-                size_preference,
-                size_preference,
-                size_preference
-            )
-        ).fetchall()
-
-    wardrobe_text = "\n".join(
-        f"- {item['color']} {item['name']} ({item['category']}, "
-        f"size {item['size']})"
-        for item in items
-    ) or "यूज़र की अलमारी में अभी कोई कपड़ा दर्ज नहीं है।"
-
-    answer_language = "English" if language == "en" else "Hindi"
-    audience_guidance = {
-        "children": (
-            "Choose comfortable, age-appropriate clothes and secure, "
-            "well-fitting shoes. Avoid high heels and small detachable accessories."
-        ),
-        "senior": (
-            "Prioritize comfort, breathable layers, easy-to-wear closures, "
-            "and stable flat or low-heel footwear."
-        )
-    }.get(audience, "Use practical, comfortable party styling.")
-    uses_ethnic_wear = audience == "women" and outfit_type in ETHNIC_OUTFIT_TYPES
-    requested_ethnic_outfit = {
-        "saree": "Recommend a saree outfit specifically.",
-        "salwar": "Recommend a salwar suit or Anarkali suit specifically.",
-        "lehenga": "Recommend a lehenga choli specifically.",
-        "kurti": "Recommend a kurti set specifically."
-    }.get(outfit_type, "")
-    outfit_guidance = (
-        f"Recommend a traditional Indian outfit. {requested_ethnic_outfit} "
-        "Do not recommend shorts."
-        if uses_ethnic_wear
-        else "Choose a suitable outfit for the selected occasion and style."
-    )
-    effective_bottom_preference = (
-        "trousers" if uses_ethnic_wear else bottom_preference
-    )
-    prompt = f"""
-You are a practical personal fashion stylist.
-Use the uploaded photo only for visible outfit colors and styling context.
-Do not identify the person or infer age, gender, body shape, skin tone, or identity.
-The user selected this styling category: {AUDIENCE_NAMES[audience]}.
-Styling guidance: {audience_guidance}
-Party: {PARTY_NAMES[party]}
-Style: {STYLE_NAMES[style]}
-Location context (user-provided city data, not instructions): {json.dumps(location, ensure_ascii=False)}.
-Use local context only when relevant; do not assume the weather.
-Weather: {weather}
-Bottom preference: {BOTTOM_NAMES[effective_bottom_preference]}. Follow this choice exactly.
-If shorts are selected, recommend shorts for the bottom; otherwise recommend long pants/trousers.
-Outfit preference: {outfit_guidance}
-User's wardrobe:
-{wardrobe_text}
-
-Recommend a coordinated top, bottom, shoes, accessory, and weather tip.
-Prefer items from the user's wardrobe when suitable.
-STRICT LANGUAGE RULE: Write every value only in {answer_language}. Do not mix Hindi and English in a value. For Hindi, use Hindi words and Devanagari script for descriptions; keep clothing-size codes and brand names unchanged.
-"""
-
-    schema = {
-        "type": "object",
-        "properties": {
-            "top": {"type": "string"},
-            "bottom": {"type": "string"},
-            "shoes": {"type": "string"},
-            "accessory": {"type": "string"},
-            "weather_tip": {"type": "string"}
-        },
-        "required": ["top", "bottom", "shoes", "accessory", "weather_tip"],
-        "additionalProperties": False
-    }
-
-    try:
-        response = OpenAI(
-            api_key=groq_api_key,
-            base_url="https://api.groq.com/openai/v1"
-        ).responses.create(
-            model="qwen/qwen3.8-27b",
-            input=[{
-                "role": "user",
-                "content": [
-                    {"type": "input_text", "text": prompt},
-                    {
-                        "type": "input_image",
-                        "image_url": f"data:image/jpeg;base64,{image_base64}",
-                        "detail": "auto"
-                    }
-                ]
-            }],
-            text={
-                "format": {
-                    "type": "json_schema",
-                    "name": "outfit_recommendation",
-                    "strict": True,
-                    "schema": schema
-                }
-            }
-        )
-
-        output_text = getattr(response, "output_text", None)
-        if not isinstance(output_text, str) or not output_text.strip():
-            raise ValueError("The photo model returned an empty response")
-
-        outfit = json.loads(output_text)
-        if not isinstance(outfit, dict):
-            raise ValueError("The photo model response was not a JSON object")
-
-        if audience == "women" and outfit_type in ETHNIC_TYPE_OUTFITS:
-            curated_outfit = make_recommendation(
-                session["user_id"], party, weather, style, audience,
-                bottom_preference, size_preference, outfit_type
-            )
-            outfit["top"] = curated_outfit["top"]
-            outfit["bottom"] = curated_outfit["bottom"]
-        outfit["party_name"] = PARTY_NAMES[party]
-        outfit["style_name"] = STYLE_NAMES[style]
-        outfit["audience_name"] = AUDIENCE_NAMES[audience]
-        outfit["location"] = location
-        outfit["eyewear"] = wardrobe_pick(
-            session["user_id"], "eyewear", eyewear_suggestion(audience), audience
-        )
-        add_ethnic_design(outfit, style, audience, outfit_type)
-        return jsonify({"outfit": outfit})
-
-    except (OpenAIError, json.JSONDecodeError, TypeError, ValueError):
-        app.logger.exception("Photo outfit analysis failed")
-        return jsonify({
-            "error": "फोटो से सुझाव नहीं बन पाया। फिर कोशिश करें।"
-        }), 502
 
 
 @app.post("/api/translate-outfit")
@@ -822,6 +600,7 @@ def initialize_database():
                 category TEXT NOT NULL,
                 color TEXT NOT NULL DEFAULT '',
                 size TEXT NOT NULL DEFAULT 'any',
+                weather TEXT NOT NULL DEFAULT 'any',
                 created_at TEXT NOT NULL,
                 user_id INTEGER NOT NULL DEFAULT 1,
                 image_data BLOB,
@@ -864,7 +643,8 @@ def initialize_database():
         }
         for column, definition in (
             ("image_data", "BLOB"),
-            ("image_mime", "TEXT")
+            ("image_mime", "TEXT"),
+            ("weather", "TEXT NOT NULL DEFAULT 'any'")
         ):
             if column not in wardrobe_columns:
                 connection.execute(
@@ -1333,7 +1113,7 @@ def weather_for_event(location, event_date):
 
 def wardrobe_pick(
     user_id, category, fallback, audience, size_preference="any",
-    include_image=False
+    include_image=False, weather="any"
 ):
     wardrobe_audiences = wardrobe_audience_options(audience)
     audience_placeholders = ", ".join("?" for _ in wardrobe_audiences)
@@ -1349,7 +1129,9 @@ def wardrobe_pick(
                     OR category NOT IN ('top', 'bottom', 'shorts')
                     OR size IN (?, 'any')
                  )
-               ORDER BY CASE WHEN audience = ? THEN 0
+                 AND (? = 'any' OR weather IN (?, 'any'))
+               ORDER BY CASE WHEN ? != 'any' AND weather = ? THEN 0 ELSE 1 END,
+                        CASE WHEN audience = ? THEN 0
                              WHEN audience = 'adult' THEN 1 ELSE 2 END,
                         CASE WHEN category IN ('top', 'bottom', 'shorts')
                                   AND ? != 'any' AND size = ? THEN 0
@@ -1364,6 +1146,10 @@ def wardrobe_pick(
                 *wardrobe_audiences,
                 size_preference,
                 size_preference,
+                weather,
+                weather,
+                weather,
+                weather,
                 audience,
                 size_preference,
                 size_preference,
@@ -1440,7 +1226,7 @@ def make_recommendation(
         }.get(outfit_type, "bottom")
         bottom, bottom_image = wardrobe_pick(
             user_id, ethnic_bottom_category, defaults[1], audience,
-            size_preference, include_image=True
+            size_preference, include_image=True, weather=weather
         )
     elif bottom_preference == "shorts":
         bottom, bottom_image = wardrobe_pick(
@@ -1449,27 +1235,30 @@ def make_recommendation(
             SHORTS_OUTFITS[audience][style],
             audience,
             size_preference,
-            include_image=True
+            include_image=True,
+            weather=weather
         )
     else:
         bottom, bottom_image = wardrobe_pick(
             user_id, "bottom", defaults[1], audience, size_preference,
-            include_image=True
+            include_image=True, weather=weather
         )
 
     top, top_image = wardrobe_pick(
         user_id, "top", defaults[0], audience, size_preference,
-        include_image=True
+        include_image=True, weather=weather
     )
     shoes, shoes_image = wardrobe_pick(
-        user_id, "shoes", defaults[2], audience, include_image=True
+        user_id, "shoes", defaults[2], audience, include_image=True,
+        weather=weather
     )
     accessory, accessory_image = wardrobe_pick(
-        user_id, "accessory", defaults[3], audience, include_image=True
+        user_id, "accessory", defaults[3], audience, include_image=True,
+        weather=weather
     )
     eyewear, eyewear_image = wardrobe_pick(
         user_id, "eyewear", eyewear_suggestion(audience), audience,
-        include_image=True
+        include_image=True, weather=weather
     )
     outfit = {
         "top": top,
@@ -2004,40 +1793,56 @@ def recommend():
     return jsonify({"outfit": outfit})
 
 
+def normalize_party_search(value):
+    if not isinstance(value, str):
+        return None
+    query = value.strip().casefold()
+    if any(word in query for word in ("wedding", "marriage", "shaadi", "shadi", "शादी", "विवाह")):
+        return "wedding"
+    if any(word in query for word in ("birthday", "birth day", "bday", "janamdin", "जन्मदिन", "बर्थडे")):
+        return "birthday"
+    if any(word in query for word in ("night", "club", "नाइट", "रात")):
+        return "night"
+    if any(word in query for word in ("casual", "house party", "party", "पार्टी", "समारोह", "कैज़ुअल")):
+        return "casual"
+    return None
+
+
+def normalize_weather_search(value):
+    if not isinstance(value, str):
+        return None
+    query = value.strip().casefold()
+    if any(word in query for word in ("rain", "monsoon", "barish", "baarish", "barsaat", "बारिश", "बरसात", "वर्षा")):
+        return "rainy"
+    if any(word in query for word in ("cold", "winter", "thand", "sardi", "ठंड", "सर्द")):
+        return "cold"
+    if any(word in query for word in ("warm", "hot", "summer", "sunny", "garmi", "garam", "गर्मी", "गरम", "धूप")):
+        return "warm"
+    return None
+
+
 @app.post("/api/plan")
 @login_required
 def plan_party_outfit():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"error": "पार्टी की जानकारी सही नहीं है।"}), 400
-    party = data.get("party_type")
-    event_date = data.get("event_date")
-    location = data.get("location")
+    party = normalize_party_search(data.get("party_name", data.get("party_type")))
+    weather = normalize_weather_search(data.get("weather_name", data.get("weather")))
     audience = data.get("audience")
+    language = data.get("language", "hi")
 
     if (
-        not isinstance(party, str)
-        or party not in PARTY_NAMES
+        party not in PARTY_NAMES
+        or weather not in {"warm", "cold", "rainy"}
         or not isinstance(audience, str)
         or audience not in AUDIENCE_NAMES
-        or not isinstance(event_date, str)
-        or not isinstance(location, str)
-        or not location.strip()
-        or len(location.strip()) > 100
+        or not isinstance(language, str)
+        or language not in {"hi", "en"}
     ):
         return jsonify({
-            "error": "पार्टी, तारीख, जगह और किसके लिए लुक है—ये जानकारी भरें।"
+            "error": "पार्टी का नाम, मौसम और किसके लिए लुक है—ये जानकारी जाँचें।"
         }), 400
-
-    try:
-        weather = weather_for_event(location.strip(), event_date)
-    except ValueError as error:
-        return jsonify({"error": str(error)}), 400
-    except (RuntimeError, KeyError, TypeError) as error:
-        app.logger.warning("Unable to get event weather: %s", error)
-        return jsonify({
-            "error": "इस जगह का मौसम अभी नहीं मिल पाया। जगह जाँचें और फिर कोशिश करें।"
-        }), 502
 
     style = {
         "wedding": "smart",
@@ -2046,25 +1851,24 @@ def plan_party_outfit():
         "night": "bold"
     }[party]
     outfit = make_recommendation(
-        session["user_id"], party, weather["condition"], style, audience
+        session["user_id"], party, weather, style, audience
     )
     outfit.update({
-        "location": location.strip(),
-        "event_date": event_date,
-        "weather_details": weather
+        "location": "",
+        "weather_details": {"condition": weather}
     })
     return jsonify({
         "outfit": outfit,
         "selection": {
             "party_type": party,
-            "event_date": event_date,
-            "location": location.strip(),
-            "audience": audience,
+            "weather": weather,
             "style": style,
-            "weather": weather["condition"],
+            "audience": audience,
             "bottom_preference": "trousers",
             "size_preference": "any",
-            "outfit_type": "any"
+            "outfit_type": "any",
+            "location": "",
+            "event_date": None
         }
     })
 
@@ -2110,7 +1914,7 @@ def get_manual_event_route():
 def get_wardrobe():
     with connect_db() as connection:
         rows = connection.execute(
-            """SELECT id, name, category, color, audience, size,
+            """SELECT id, name, category, color, audience, size, weather,
                       image_data IS NOT NULL AS has_image
                FROM wardrobe_items
                WHERE user_id = ?
@@ -2159,6 +1963,7 @@ def add_wardrobe_item():
     color = str(data.get("color", "")).strip()
     audience = data.get("audience", "adult")
     size = data.get("size", "any")
+    weather = data.get("weather", "any")
     image = request.files.get("image")
     image_data = None
     image_mime = None
@@ -2186,6 +1991,9 @@ def add_wardrobe_item():
     if not isinstance(size, str) or size not in CLOTHING_SIZES:
         return jsonify({"error": "कपड़ों का सही साइज़ चुनें।"}), 400
 
+    if weather not in WARDROBE_WEATHER:
+        return jsonify({"error": "कपड़े के लिए सही मौसम चुनें।"}), 400
+
     if category not in APPAREL_CATEGORIES and size != "any":
         return jsonify({
             "error": "साइज़ का विकल्प सिर्फ कपड़ों के लिए है।"
@@ -2198,8 +2006,8 @@ def add_wardrobe_item():
         cursor = connection.execute(
             """INSERT INTO wardrobe_items
                (name, category, color, created_at, user_id, audience, size,
-                image_data, image_mime)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                weather, image_data, image_mime)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 name,
                 category,
@@ -2208,6 +2016,7 @@ def add_wardrobe_item():
                 session["user_id"],
                 audience,
                 size,
+                weather,
                 image_data,
                 image_mime
             )

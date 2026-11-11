@@ -263,8 +263,9 @@ label {
 }
 
 select,
+.planner-input,
 .wardrobe-form input,
-#location {
+.wardrobe-search {
   width: 100%;
   height: 46px;
   padding: 0 13px;
@@ -276,8 +277,9 @@ select,
 }
 
 select:focus,
+.planner-input:focus,
 .wardrobe-form input:focus,
-#location:focus {
+.wardrobe-search:focus {
   border-color: var(--lavender);
   box-shadow: 0 0 0 3px rgba(183, 162, 255, 0.12);
 }
@@ -295,6 +297,11 @@ select:focus,
 
 .location-privacy-note a {
   color: var(--lavender);
+}
+
+.planner-input::placeholder,
+.wardrobe-search::placeholder {
+  color: #77738e;
 }
 
 .primary-button,
@@ -665,7 +672,7 @@ select:focus,
 
 .wardrobe-form {
   display: grid;
-  grid-template-columns: 1.2fr 0.9fr 0.9fr 1fr 0.8fr auto;
+  grid-template-columns: 1.2fr 0.9fr 0.9fr 1fr 0.8fr 0.9fr auto;
   align-items: end;
   gap: 12px;
   margin-top: 18px;
@@ -696,6 +703,17 @@ select:focus,
   margin-top: 6px;
   color: var(--muted);
   font-size: 11px;
+}
+
+.wardrobe-image-field > .wardrobe-photo-note {
+  color: var(--lavender);
+}
+
+.look-weather {
+  margin: 0 0 14px;
+  color: var(--lavender);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .wardrobe-image-preview {
@@ -734,6 +752,20 @@ select:focus,
 
 .wardrobe-section .history-list {
   margin-top: 12px;
+}
+
+.wardrobe-search-label {
+  margin-top: 18px;
+}
+
+.wardrobe-search {
+  height: 46px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  color: var(--text);
+  background: #19172d;
 }
 
 .footer {
