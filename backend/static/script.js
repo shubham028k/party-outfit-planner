@@ -2,6 +2,7 @@ const form = document.getElementById("outfitForm");
 const errorMessage = document.getElementById("errorMessage");
 const saveMessage = document.getElementById("saveMessage");
 const saveButton = document.getElementById("saveButton");
+const nextOutfitButton = document.getElementById("nextOutfitButton");
 const resultPlaceholder = document.getElementById("resultPlaceholder");
 const outfitResult = document.getElementById("outfitResult");
 const partySearchInput = document.getElementById("partySearch");
@@ -59,7 +60,6 @@ async function readJsonResponse(response) {
 
 const wardrobeForm = document.getElementById("wardrobeForm");
 const wardrobeCategoryInput = document.getElementById("wardrobeCategory");
-const wardrobeCategoryOptions = document.querySelectorAll("#wardrobeCategoryOptions [data-wardrobe-category]");
 const wardrobeMessage = document.getElementById("wardrobeMessage");
 const wardrobeList = document.getElementById("wardrobeList");
 const emptyWardrobe = document.getElementById("emptyWardrobe");
@@ -71,15 +71,47 @@ let wardrobeImagePreviewUrl = null;
 
 let currentSelection = null;
 let currentOutfit = null;
+let lastOutfit = null;
+let currentVariation = 0;
+let outfitTranslationRequest = 0;
+let planRequestGeneration = 0;
+let planRequestPending = false;
 
 form.addEventListener("input", invalidateCurrentLook);
 form.addEventListener("change", invalidateCurrentLook);
 
 function invalidateCurrentLook() {
-  if (!currentSelection) return;
+  const hadLook = Boolean(currentSelection || currentOutfit || lastOutfit);
+  planRequestGeneration += 1;
+  if (!hadLook && !planRequestPending) return;
   currentSelection = null;
+  currentOutfit = null;
+  lastOutfit = null;
+  outfitTranslationRequest += 1;
+  outfitResult.hidden = true;
+  resultPlaceholder.hidden = false;
+  const placeholderText = resultPlaceholder.querySelector("p");
+  if (placeholderText) {
+    placeholderText.textContent = appLanguage === "en"
+      ? "Your details changed. Generate a new look to see updated clothes."
+      : "जानकारी बदल गई है। नए कपड़े देखने के लिए लुक फिर से बनाओ।";
+  }
+  errorMessage.textContent = "";
   saveButton.disabled = true;
+  nextOutfitButton.hidden = true;
+  nextOutfitButton.disabled = true;
+  currentVariation = 0;
   saveMessage.textContent = translateText("तुमने जानकारी बदली है; लुक फिर से बनाओ।");
+}
+
+function updateNextOutfitLabel() {
+  if (!nextOutfitButton) return;
+  const nextVariation = (currentVariation + 1) % 3;
+  const label = appLanguage === "en"
+    ? `Next outfit combination (${nextVariation + 1}/3)`
+    : `अगला कपड़ों का मेल (${nextVariation + 1}/3)`;
+  const text = nextOutfitButton.querySelector("span");
+  if (text && !planRequestPending) text.textContent = label;
 }
 
 const categoryNames = {
@@ -119,11 +151,12 @@ const wardrobeAudienceNames = {
   all: "सबके लिए"
 };
 
-const wardrobeWeatherNames = {
-  any: ["सभी मौसम", "All weather"],
-  warm: ["गर्मी", "Warm"],
-  cold: ["ठंड", "Cold"],
-  rainy: ["बारिश", "Rainy"]
+const wardrobePartyNames = {
+  any: ["सभी पार्टियाँ", "All parties"],
+  wedding: ["शादी की पार्टी", "Wedding party"],
+  birthday: ["बर्थडे पार्टी", "Birthday party"],
+  casual: ["कैज़ुअल पार्टी", "Casual party"],
+  night: ["नाइट पार्टी", "Night party"]
 };
 
 const colorCombinationIdeas = [
@@ -375,13 +408,19 @@ function renderWeatherOutfitImages(outfit) {
     const imageUrl = outfit.item_images?.[field];
     if (typeof imageUrl !== "string" || !imageUrl) return [];
 
-    const figure = document.createElement("figure");
+    const figure = document.createElement("button");
+    figure.type = "button";
     figure.className = "weather-outfit-image";
+    figure.title = appLanguage === "en"
+      ? `View ${outfit[field]} larger`
+      : `${outfit[field]} की बड़ी फोटो देखें`;
+    figure.addEventListener("click", () => showOutfitImagePreview(imageUrl, outfit[field]));
     const image = document.createElement("img");
     image.src = imageUrl;
     image.alt = outfit[field] || labels[0];
     image.loading = "lazy";
-    const caption = document.createElement("figcaption");
+    const caption = document.createElement("span");
+    caption.className = "weather-outfit-image-label";
     caption.textContent = labels[appLanguage === "en" ? 1 : 0];
     figure.append(image, caption);
     return [figure];
@@ -390,8 +429,30 @@ function renderWeatherOutfitImages(outfit) {
   container.hidden = figures.length === 0;
 }
 
+function showOutfitImagePreview(imageUrl, itemName) {
+  const dialog = document.getElementById("outfitImageDialog");
+  const image = document.getElementById("outfitImageDialogPhoto");
+  const name = document.getElementById("outfitImageDialogName");
+  if (!dialog || !image || !name || typeof imageUrl !== "string" || !imageUrl) return;
+  image.src = imageUrl;
+  image.alt = itemName || "";
+  name.textContent = itemName || "";
+  if (!dialog.open) dialog.showModal();
+}
+
+const outfitImageDialog = document.getElementById("outfitImageDialog");
+const closeOutfitImageDialog = document.getElementById("closeOutfitImageDialog");
+if (outfitImageDialog && closeOutfitImageDialog) {
+  closeOutfitImageDialog.addEventListener("click", () => outfitImageDialog.close());
+  outfitImageDialog.addEventListener("click", (event) => {
+    if (event.target === outfitImageDialog) outfitImageDialog.close();
+  });
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const requestGeneration = ++planRequestGeneration;
+  planRequestPending = true;
   errorMessage.textContent = "";
   saveMessage.textContent = "";
 
@@ -400,11 +461,27 @@ form.addEventListener("submit", async (event) => {
     audience: document.getElementById("outfitAudience").value,
     event_date: eventDateInput.value,
     location: eventLocationInput.value.trim(),
-    language: appLanguage
+    language: appLanguage,
+    variation: 0
   };
+  currentVariation = 0;
   currentSelection = null;
   currentOutfit = null;
+  lastOutfit = null;
+  outfitTranslationRequest += 1;
   saveButton.disabled = true;
+  nextOutfitButton.hidden = true;
+  nextOutfitButton.disabled = true;
+  outfitResult.hidden = true;
+  resultPlaceholder.hidden = false;
+  const placeholderText = resultPlaceholder.querySelector("p");
+  if (placeholderText) {
+    placeholderText.textContent = appLanguage === "en"
+      ? "Building your updated party look…"
+      : "तुम्हारा नया पार्टी लुक बनाया जा रहा है…";
+  }
+  const resultPanel = document.getElementById("resultPanel");
+  resultPanel?.setAttribute("aria-busy", "true");
 
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
@@ -418,6 +495,7 @@ form.addEventListener("submit", async (event) => {
     });
 
     const data = await readJsonResponse(response);
+    if (requestGeneration !== planRequestGeneration) return;
 
     if (!response.ok) {
       throw new Error(data.error || "लुक बनाते समय समस्या आई।");
@@ -427,29 +505,220 @@ form.addEventListener("submit", async (event) => {
     saveButton.disabled = false;
     showOutfit(data.outfit);
   } catch (error) {
-    errorMessage.textContent = translateText(error.message);
+    if (requestGeneration === planRequestGeneration) {
+      errorMessage.textContent = translateText(error.message);
+      if (placeholderText) {
+        placeholderText.textContent = appLanguage === "en"
+          ? "A new look could not be created. Check the message above and try again."
+          : "नया लुक नहीं बन पाया। ऊपर का संदेश देखें और फिर कोशिश करें।";
+      }
+    }
   } finally {
+    planRequestPending = false;
+    updateNextOutfitLabel();
     button.disabled = false;
-    button.querySelector("span").textContent = translateText("मेरी अलमारी से लुक सुझाओ");
+    resultPanel?.removeAttribute("aria-busy");
+  button.querySelector("span").textContent = appLanguage === "en"
+    ? "Suggest a party look"
+    : "मेरी पार्टी का लुक बताओ";
   }
 });
 
+nextOutfitButton.addEventListener("click", async () => {
+  if (!currentSelection || !currentOutfit || nextOutfitButton.disabled) return;
+
+  const previousSelection = { ...currentSelection };
+  const previousOutfit = { ...currentOutfit };
+  const nextVariation = (currentVariation + 1) % 3;
+  const requestGeneration = ++planRequestGeneration;
+  planRequestPending = true;
+  errorMessage.textContent = "";
+  saveMessage.textContent = "";
+  nextOutfitButton.disabled = true;
+  saveButton.disabled = true;
+  nextOutfitButton.querySelector("span").textContent = appLanguage === "en"
+    ? "Finding another combination…"
+    : "अगला मेल ढूँढ़ रहे हैं…";
+  document.getElementById("resultPanel")?.setAttribute("aria-busy", "true");
+
+  try {
+    const response = await fetch("/api/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        party_name: previousSelection.party_type,
+        audience: previousSelection.audience,
+        weather: previousSelection.weather,
+        language: appLanguage,
+        ...(previousSelection.person_name
+          ? { person_name: previousSelection.person_name }
+          : {}),
+        variation: nextVariation
+      })
+    });
+    const data = await readJsonResponse(response);
+    if (requestGeneration !== planRequestGeneration) return;
+    if (!response.ok) throw new Error(data.error || "अगला लुक नहीं बन पाया।");
+
+    currentVariation = nextVariation;
+    currentSelection = {
+      ...data.selection,
+      location: previousSelection.location || "",
+      event_date: previousSelection.event_date || null
+    };
+    const nextOutfit = {
+      ...data.outfit,
+      location: previousOutfit.location || "",
+      event_date: previousOutfit.event_date,
+      weather_details: previousOutfit.weather_details,
+      weather_outfit: previousOutfit.weather_outfit,
+      weather_tip: previousOutfit.weather_tip
+    };
+    saveButton.disabled = false;
+    showOutfit(nextOutfit);
+  } catch (error) {
+    if (requestGeneration === planRequestGeneration) {
+      errorMessage.textContent = translateText(error.message);
+    }
+  } finally {
+    if (requestGeneration === planRequestGeneration) {
+      planRequestPending = false;
+      nextOutfitButton.disabled = !currentSelection;
+      updateNextOutfitLabel();
+      saveButton.disabled = !currentSelection;
+      document.getElementById("resultPanel")?.removeAttribute("aria-busy");
+    }
+  }
+});
+
+function displayWardrobeItemName(name, category) {
+  const rawName = typeof name === "string" ? name.trim() : "";
+  const cleanName = rawName
+    .replace(/\.[a-z0-9]{2,5}$/i, "")
+    .replace(/[._ -]?\d+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  const compact = cleanName.toLowerCase().replace(/[^a-z]/g, "");
+  const labels = {
+    top: ["टी-शर्ट / टॉप", "T-shirt / top"],
+    bottom: ["पैंट", "Pants"],
+    shorts: ["शॉर्ट्स", "Shorts"],
+    shoes: ["जूते", "Shoes"],
+    accessory: ["एक्सेसरी", "Accessory"],
+    eyewear: ["चश्मा", "Glasses"],
+    perfume: ["परफ्यूम", "Perfume"],
+    saree: ["साड़ी", "Saree"],
+    salwar: ["सलवार-सूट", "Salwar suit"],
+    lehenga: ["लहंगा", "Lehenga"],
+    kurti: ["कुर्ती", "Kurti"]
+  };
+  const languageIndex = appLanguage === "en" ? 1 : 0;
+  if (/^(tshirt|tshart|tee|tshirtshirt)$/.test(compact)) return appLanguage === "en" ? "T-shirt" : "टी-शर्ट";
+  if (/^(jeans?|jeance|jens|denim)$/.test(compact)) return appLanguage === "en" ? "Jeans" : "जींस";
+  if (/^(jute\d*|shoes?|footwear|sneakers?)$/.test(compact)) return appLanguage === "en" ? "Shoes" : "जूते";
+  if (/^(shirt|shirts)$/.test(compact)) return appLanguage === "en" ? "Shirt" : "शर्ट";
+  if (!cleanName || /\d/.test(cleanName)) return labels[category]?.[languageIndex] || (appLanguage === "en" ? "Clothing item" : "कपड़े का आइटम");
+  const translated = translateText(cleanName);
+  if (hasWrongLanguageScript(translated)) return labels[category]?.[languageIndex] || translated;
+  return translated;
+}
+
+function renderAvoidTip(hasItems) {
+  const section = document.getElementById("avoidSection");
+  const tip = document.getElementById("avoidTip");
+  const weather = currentSelection?.weather;
+  section.hidden = !hasItems || !weather;
+  if (!hasItems || !weather) return;
+  const tips = {
+    warm: ["भारी जैकेट, मोटे स्वेटर और बहुत गर्म कपड़ों से बचें। हल्के, हवादार कपड़े चुनें।", "Avoid heavy jackets, thick sweaters, and overly warm layers. Choose light, breathable clothes."],
+    cold: ["पतले कपड़े और खुले जूते न पहनें। स्वेटर या जैकेट की परत और बंद जूते चुनें।", "Avoid thin layers and open shoes. Add a sweater or jacket and wear closed shoes."],
+    rainy: ["फिसलने वाले जूते और जल्दी भीगने वाले कपड़ों से बचें। ग्रिप वाले बंद जूते चुनें।", "Avoid slippery shoes and clothes that soak easily. Choose closed shoes with good grip."]
+  };
+  tip.textContent = tips[weather]?.[appLanguage === "en" ? 1 : 0] || "";
+}
+
 function renderSavedWardrobeItems(outfit) {
   const fields = [
-    ["outfitTopCard", "outfitTop", "top"], ["outfitBottomCard", "outfitBottom", "bottom"],
-    ["outfitShoesCard", "outfitShoes", "shoes"], ["outfitAccessoryCard", "outfitAccessory", "accessory"],
-    ["outfitEyewearCard", "outfitEyewear", "eyewear"], ["outfitPerfumeCard", "outfitPerfume", "perfume"]
+    ["outfitTopCard", "outfitTop", "top", "outfitTopSource"],
+    ["outfitBottomCard", "outfitBottom", "bottom", "outfitBottomSource"],
+    ["outfitShoesCard", "outfitShoes", "shoes", "outfitShoesSource"],
+    ["outfitAccessoryCard", "outfitAccessory", "accessory", "outfitAccessorySource"],
   ];
   let visibleCount = 0;
-  for (const [cardId, textId, field] of fields) {
+  for (const [cardId, textId, field, sourceId] of fields) {
     const value = typeof outfit[field] === "string" ? outfit[field].trim() : "";
-    document.getElementById(textId).textContent = value;
+    const category = outfit.item_categories?.[field] || (field === "top" ? "top" : field === "bottom" ? currentSelection?.outfit_type || "bottom" : field);
+    document.getElementById(textId).textContent = displayWardrobeItemName(value, category);
     document.getElementById(cardId).hidden = !value;
+    const sourceBadge = document.getElementById(sourceId);
+    const source = outfit.item_sources?.[field];
+    sourceBadge.textContent = source === "saved_weather_adjusted"
+      ? (appLanguage === "en" ? "Closet item + weather layer" : "अलमारी का कपड़ा + मौसम की परत")
+      : source === "saved"
+        ? (appLanguage === "en" ? "In your closet" : "तुम्हारी अलमारी")
+        : (appLanguage === "en" ? "Suggested" : "सुझाव");
+    sourceBadge.hidden = !value || !source;
     if (value) visibleCount += 1;
   }
   document.getElementById("emptyWardrobeLook").hidden = visibleCount > 0;
+  document.getElementById("wearTitle").hidden = visibleCount === 0;
+  const suitabilityWarning = document.getElementById("partySuitabilityWarning");
+  const missingWardrobeItems = Array.isArray(outfit.missing_wardrobe_items)
+    ? outfit.missing_wardrobe_items
+    : Array.isArray(outfit.suggested_wedding_items)
+      ? outfit.suggested_wedding_items
+      : [];
+  suitabilityWarning.hidden = missingWardrobeItems.length === 0;
+  if (missingWardrobeItems.length) {
+    const labels = appLanguage === "en"
+      ? { top: "a suitable top", bottom: "a matching bottom", shoes: "party shoes", accessory: "a party accessory" }
+      : { top: "उपयुक्त टॉप", bottom: "मैचिंग बॉटम", shoes: "पार्टी के जूते", accessory: "पार्टी एक्सेसरी" };
+    const missing = missingWardrobeItems.map((item) => labels[item] || item).join(", ");
+    suitabilityWarning.textContent = appLanguage === "en"
+      ? `Not in your closet yet: ${missing}. Add them to complete your saved-clothes look.`
+      : `ये चीज़ें अभी अलमारी में नहीं हैं: ${missing}। इन्हें जोड़ने पर पूरा लुक बनेगा।`;
+  }
+  updateGoogleImagesButton(outfit, visibleCount);
+  renderAvoidTip(visibleCount > 0);
   saveButton.disabled = visibleCount === 0;
   return visibleCount;
+}
+
+function updateGoogleImagesButton(outfit, visibleCount) {
+  const button = document.getElementById("googleImagesButton");
+  if (!button) return;
+
+  const partyTerms = {
+    wedding: "Indian wedding guest outfit",
+    birthday: "Indian birthday party outfit",
+    casual: "Indian casual party outfit",
+    night: "Indian night party outfit"
+  };
+  const audienceTerms = {
+    men: "for men",
+    women: "for women",
+    children: "for children",
+    senior: "comfortable outfit for older adults"
+  };
+  const styleTerms = {
+    casual: "casual style",
+    smart: "smart style",
+    bold: "bold style"
+  };
+  const query = [
+    partyTerms[currentSelection?.party_type],
+    audienceTerms[currentSelection?.audience],
+    styleTerms[currentSelection?.style],
+    outfit.top,
+    outfit.bottom,
+    outfit.shoes
+  ].filter((part) => typeof part === "string" && part.trim()).join(" ");
+  const generatedUrl = outfit.google_images_url;
+  button.href = typeof generatedUrl === "string"
+    && generatedUrl.startsWith("https://www.google.com/search?tbm=isch&q=")
+    ? generatedUrl
+    : `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`;
+  button.hidden = visibleCount === 0;
 }
 
 function showOutfit(outfit) {
@@ -464,9 +733,16 @@ function showOutfit(outfit) {
     `${outfit.audience_name} · ${outfit.style_name} स्टाइल`;
   renderSavedWardrobeItems(outfit);
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
+  const colorTip = outfit.color_tip;
+  const colorTipBox = document.getElementById("colorTipBox");
+  document.getElementById("colorTip").textContent =
+    colorTip && typeof colorTip === "object"
+      ? (colorTip[appLanguage] || colorTip.hi || "")
+      : "";
+  colorTipBox.hidden = !document.getElementById("colorTip").textContent;
   document.getElementById("weatherOutfit").textContent = outfit.weather_outfit || "";
-  document.getElementById("weatherOutfitBox").hidden = true;
-  document.querySelector(".weather-tip").hidden = true;
+  document.getElementById("weatherOutfitBox").hidden = !outfit.weather_outfit;
+  document.querySelector(".weather-tip").hidden = !outfit.weather_tip;
   renderWeatherOutfitImages(outfit);
   renderLookWeather(
     currentSelection?.weather,
@@ -478,28 +754,59 @@ function showOutfit(outfit) {
     outfitTopImage: "top",
     outfitBottomImage: "bottom",
     outfitShoesImage: "shoes",
-    outfitAccessoryImage: "accessory",
-    outfitEyewearImage: "eyewear",
-    outfitPerfumeImage: "perfume"
+    outfitAccessoryImage: "accessory"
   };
   for (const [elementId, field] of Object.entries(imageFields)) {
     const image = document.getElementById(elementId);
-    const icon = image.parentElement;
-    if (outfit.item_images?.[field]) {
-      image.src = outfit.item_images[field];
+    const imageLink = image.closest(".outfit-image-link");
+    const imageUrl = outfit.item_images?.[field];
+    if (typeof imageUrl === "string" && imageUrl) {
       image.alt = outfit[field] || "";
-      image.hidden = false;
-      icon.classList.add("has-wardrobe-image");
+      image.hidden = true;
+      imageLink.classList.remove("has-wardrobe-image");
+      imageLink.disabled = true;
+      imageLink.removeAttribute("title");
+      image.dataset.requestedUrl = imageUrl;
+      const updateImageState = () => {
+        if (image.dataset.requestedUrl !== imageUrl) return;
+        const loaded = image.naturalWidth > 0;
+        image.hidden = !loaded;
+        imageLink.classList.toggle("has-wardrobe-image", loaded);
+        if (loaded) {
+          imageLink.disabled = false;
+          imageLink.title = appLanguage === "en"
+            ? `View ${outfit[field]} larger`
+            : `${outfit[field]} की बड़ी फोटो देखें`;
+          imageLink.onclick = () => showOutfitImagePreview(imageUrl, outfit[field]);
+        } else {
+          imageLink.disabled = true;
+          imageLink.onclick = null;
+          imageLink.removeAttribute("title");
+        }
+      };
+      image.onload = updateImageState;
+      image.onerror = updateImageState;
+      image.removeAttribute("src");
+      image.src = imageUrl;
     } else {
+      image.dataset.requestedUrl = "";
+      image.onload = null;
+      image.onerror = null;
       image.removeAttribute("src");
       image.alt = "";
       image.hidden = true;
-      icon.classList.remove("has-wardrobe-image");
+      imageLink.classList.remove("has-wardrobe-image");
+      imageLink.disabled = true;
+      imageLink.onclick = null;
+      imageLink.removeAttribute("title");
     }
   }
 
   resultPlaceholder.hidden = true;
   outfitResult.hidden = false;
+  nextOutfitButton.hidden = false;
+  nextOutfitButton.disabled = false;
+  updateNextOutfitLabel();
   outfitResult.classList.remove("outfit-enter");
   requestAnimationFrame(() => outfitResult.classList.add("outfit-enter"));
 }
@@ -524,7 +831,7 @@ function updateOutfitItemLabels(audience, outfitType) {
     ? (appLanguage === "en" ? labelsEnglish[outfitType] : labelsByType[outfitType])
     : (appLanguage === "en" ? defaultEnglish : defaultHindi);
 
-  document.querySelectorAll(".outfit-item small").forEach((item, index) => {
+  document.querySelectorAll(".outfit-category-label").forEach((item, index) => {
     item.textContent = labels[index] || "";
   });
 }
@@ -626,14 +933,18 @@ function wardrobePhotoName(file, index) {
   return (appLanguage === "en" ? `Clothing item ${index + 1}` : `कपड़ा ${index + 1}`).slice(0, 60);
 }
 
+function selectedWardrobePhotoCount() {
+  return wardrobeImageInput.files?.length || 0;
+}
+
 function updateWardrobePhotoCount() {
-  const count = wardrobeImageInput.files?.length || 0;
+  const count = selectedWardrobePhotoCount();
   const countLabel = document.getElementById("wardrobeImageCount");
-  if (!countLabel) return;
   countLabel.hidden = count === 0;
+  const categoryName = translateText(categoryNames[wardrobeCategoryInput.value] || "कपड़े");
   countLabel.textContent = appLanguage === "en"
-    ? `${count} photo${count === 1 ? "" : "s"} selected.`
-    : `${count} फोटो चुनी गईं।`;
+    ? `${count} photo${count === 1 ? "" : "s"} selected for ${categoryName}.`
+    : `${categoryName} के लिए ${count} फोटो चुनी गईं।`;
 }
 
 function wardrobeItemMatchesSearch(item, query) {
@@ -646,7 +957,7 @@ function wardrobeItemMatchesSearch(item, query) {
     categoryNames[item.category],
     item.audience,
     wardrobeAudienceNames[item.audience],
-    ...(wardrobeWeatherNames[item.weather] || [])
+    ...(wardrobePartyNames[item.party_tag] || [])
   ].filter(Boolean).join(" ").toLocaleLowerCase();
   const categoryAliases = wardrobeSearchCategoryAliases[item.category] || [];
   return queryTerms.every((term) =>
@@ -654,27 +965,19 @@ function wardrobeItemMatchesSearch(item, query) {
   );
 }
 
-function setWardrobeCategory(category) {
-  wardrobeCategoryInput.value = category;
-  wardrobeCategoryOptions.forEach((button) => {
-    const selected = button.dataset.wardrobeCategory === category;
-    button.classList.toggle("is-selected", selected);
-    button.setAttribute("aria-pressed", String(selected));
-  });
-}
-
-wardrobeCategoryOptions.forEach((button) => {
-  button.addEventListener("click", () => setWardrobeCategory(button.dataset.wardrobeCategory));
-});
-
 wardrobeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   wardrobeMessage.textContent = "";
 
   const selectedPhotos = Array.from(wardrobeImageInput.files || []);
   const enteredName = document.getElementById("wardrobeName").value.trim();
+  const aiIdentifyEnabled = document.getElementById("wardrobeAiIdentify").checked;
   if (!enteredName && selectedPhotos.length === 0) {
     wardrobeMessage.textContent = translateText("कपड़े का नाम लिखें या फोटो चुनें।");
+    return;
+  }
+  if (selectedPhotos.length > 20) {
+    wardrobeMessage.textContent = translateText("एक बार में अधिकतम 20 फोटो चुनें।");
     return;
   }
 
@@ -687,24 +990,30 @@ wardrobeForm.addEventListener("submit", async (event) => {
   try {
     for (const [index, photo] of itemsToAdd.entries()) {
       const formData = new FormData();
-      const itemName = selectedPhotos.length > 1 || (!enteredName && photo)
-        ? wardrobePhotoName(photo, index)
-        : enteredName;
+      const autoIdentify = Boolean(photo && aiIdentifyEnabled);
+      const itemName = autoIdentify
+        ? (selectedPhotos.length === 1 ? enteredName : "")
+        : (selectedPhotos.length > 1 || (!enteredName && photo)
+          ? wardrobePhotoName(photo, index)
+          : enteredName);
       formData.set("name", itemName);
       formData.set("category", wardrobeCategoryInput.value);
       formData.set("audience", document.getElementById("wardrobeAudience").value);
-      formData.set("weather", document.getElementById("wardrobeWeather").value);
+      formData.set("party_tag", document.getElementById("wardrobeParty").value);
+      formData.set("auto_identify", String(autoIdentify));
+      formData.set("language", appLanguage);
       if (photo) formData.set("image", photo);
 
-      addButton.textContent = selectedPhotos.length > 1
-        ? (appLanguage === "en" ? `Adding ${index + 1}/${itemsToAdd.length}…` : `${index + 1}/${itemsToAdd.length} जोड़े जा रहे हैं…`)
-        : translateText("जोड़ा जा रहा है…");
+      addButton.textContent = autoIdentify
+        ? (appLanguage === "en"
+          ? `Recognizing ${index + 1}/${itemsToAdd.length}…`
+          : `${index + 1}/${itemsToAdd.length} फोटो पहचान रहे हैं…`)
+        : selectedPhotos.length > 1
+          ? (appLanguage === "en" ? `Adding ${index + 1}/${itemsToAdd.length}…` : `${index + 1}/${itemsToAdd.length} जोड़े जा रहे हैं…`)
+          : translateText("जोड़ा जा रहा है…");
 
       try {
-        const response = await fetch("/api/wardrobe", {
-          method: "POST",
-          body: formData
-        });
+        const response = await fetch("/api/wardrobe", { method: "POST", body: formData });
         const data = await readJsonResponse(response);
         if (!response.ok) throw new Error(data.error || "कपड़ा नहीं जुड़ पाया।");
         added += 1;
@@ -715,8 +1024,8 @@ wardrobeForm.addEventListener("submit", async (event) => {
 
     if (added > 0) {
       wardrobeForm.reset();
-      setWardrobeCategory(wardrobeCategoryInput.defaultValue || "top");
       clearWardrobeImagePreview();
+      updateWardrobePhotoCount();
       await loadWardrobe();
     }
 
@@ -779,24 +1088,33 @@ function createWardrobeCard(item) {
   card.className = "history-card";
 
   const title = document.createElement("h3");
-  const itemName = translateText(item.name);
-  const localizedCategory = translateText(categoryNames[item.category] || "Clothing item");
-  title.textContent = hasWrongLanguageScript(itemName)
-    ? `${localizedCategory} ${item.id}`
-    : itemName;
+  title.textContent = displayWardrobeItemName(item.name, item.category);
 
   const details = document.createElement("p");
   const category = translateText(categoryNames[item.category] || item.category);
   const audience = translateText(wardrobeAudienceNames[item.audience] || item.audience);
-  const weather = item.weather && item.weather !== "any"
-    ? ` · ${translateText("मौसम")}: ${wardrobeWeatherNames[item.weather]?.[appLanguage === "en" ? 1 : 0] || item.weather}`
-    : "";
-  details.textContent = `${audience} · ${category}${weather}`;
+  const partyTag = wardrobePartyNames[item.party_tag]?.[appLanguage === "en" ? 1 : 0]
+    || wardrobePartyNames.any[appLanguage === "en" ? 1 : 0];
+  details.textContent = `${audience} · ${category} · ${partyTag}`;
+
+  const actions = document.createElement("div");
+  actions.className = "wardrobe-card-actions";
+
+  const editButton = document.createElement("button");
+  editButton.type = "button";
+  editButton.className = "wardrobe-edit-button";
+  editButton.dataset.action = "rename";
+  editButton.textContent = "✎";
+  editButton.title = appLanguage === "en" ? "Edit item name and party tag" : "नाम या पार्टी tag बदलें";
+  editButton.setAttribute("aria-label", editButton.title);
+  editButton.addEventListener("click", () => startWardrobeItemRename(item, title, actions));
 
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
-  deleteButton.textContent = translateText("हटाएँ");
+  deleteButton.dataset.action = "delete";
+  deleteButton.textContent = appLanguage === "en" ? "Delete" : "हटाएँ";
   deleteButton.addEventListener("click", () => deleteWardrobeItem(item.id));
+  actions.append(editButton, deleteButton);
 
   if (item.image_url) {
     const image = document.createElement("img");
@@ -806,15 +1124,94 @@ function createWardrobeCard(item) {
     image.loading = "lazy";
     card.append(image);
   }
-  card.append(title, details, deleteButton);
+  card.append(title, details, actions);
   return card;
+}
+
+function startWardrobeItemRename(item, title, actions) {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = 60;
+  input.className = "wardrobe-rename-input";
+  input.value = item.name;
+  input.setAttribute("aria-label", appLanguage === "en" ? "New item name" : "कपड़े का नया नाम");
+
+  const partySelect = document.createElement("select");
+  partySelect.className = "wardrobe-party-edit-select";
+  partySelect.setAttribute("aria-label", appLanguage === "en" ? "Party tag" : "पार्टी tag");
+  for (const [value, labels] of Object.entries(wardrobePartyNames)) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = labels[appLanguage === "en" ? 1 : 0];
+    partySelect.append(option);
+  }
+  partySelect.value = item.party_tag || "any";
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.className = "wardrobe-rename-save";
+  saveButton.textContent = appLanguage === "en" ? "Save" : "सेव";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "wardrobe-rename-cancel";
+  cancelButton.textContent = appLanguage === "en" ? "Cancel" : "रद्द";
+  cancelButton.addEventListener("click", renderWardrobeItems);
+
+  const editingControls = document.createElement("div");
+  editingControls.className = "wardrobe-card-actions";
+  editingControls.append(saveButton, cancelButton);
+  const editor = document.createElement("div");
+  editor.className = "wardrobe-item-editor";
+  editor.append(input, partySelect);
+  title.replaceWith(editor);
+  actions.replaceWith(editingControls);
+  input.focus();
+  input.select();
+
+  const saveName = async () => {
+    const name = input.value.trim();
+    if (!name) {
+      wardrobeMessage.textContent = translateText("नाम खाली नहीं हो सकता।");
+      input.focus();
+      return;
+    }
+    const partyTag = partySelect.value;
+    if (name === item.name && partyTag === (item.party_tag || "any")) {
+      renderWardrobeItems();
+      return;
+    }
+
+    saveButton.disabled = true;
+    try {
+      const response = await fetch(`/api/wardrobe/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, party_tag: partyTag })
+      });
+      const data = await readJsonResponse(response);
+      if (!response.ok) throw new Error(data.error || "नाम सेव नहीं हो पाया।");
+      wardrobeMessage.textContent = "✓ " + translateText(data.message);
+      await loadWardrobe();
+    } catch (error) {
+      wardrobeMessage.textContent = translateText(error.message);
+      saveButton.disabled = false;
+      input.focus();
+    }
+  };
+
+  saveButton.addEventListener("click", saveName);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") saveName();
+    if (event.key === "Escape") renderWardrobeItems();
+  });
 }
 
 function clearWardrobeImagePreview() {
   wardrobeImageInput.value = "";
   wardrobeImagePreview.removeAttribute("src");
   wardrobeImagePreviewBox.hidden = true;
-  document.getElementById("wardrobeImageCount").hidden = true;
+  updateWardrobePhotoCount();
   if (wardrobeImagePreviewUrl) URL.revokeObjectURL(wardrobeImagePreviewUrl);
   wardrobeImagePreviewUrl = null;
 }
@@ -826,7 +1223,7 @@ wardrobeImageInput.addEventListener("change", () => {
     clearWardrobeImagePreview();
     return;
   }
-  if (photos.length > 20) {
+  if (selectedWardrobePhotoCount() > 20) {
     wardrobeMessage.textContent = translateText("एक बार में अधिकतम 20 फोटो चुनें।");
     clearWardrobeImagePreview();
     return;
@@ -918,8 +1315,7 @@ function createHistoryCard(saved) {
   const details = document.createElement("p");
   const outfitParts = [
     ["👕", saved.outfit.top], ["👖", saved.outfit.bottom],
-    ["👟", saved.outfit.shoes], ["⌚", saved.outfit.accessory],
-    ["👓", saved.outfit.eyewear], ["🧴", saved.outfit.perfume]
+    ["👟", saved.outfit.shoes], ["⌚", saved.outfit.accessory]
   ].filter(([, value]) => typeof value === "string" && value.trim())
     .map(([icon, value]) => `${icon} ${value.trim()}`);
   const translatedDetails = translateText(
@@ -1137,6 +1533,7 @@ const englishText = {
   "चूड़ियाँ": "Bangles",
   "साड़ी ब्लाउज़": "Saree blouse",
   "साड़ी": "Saree",
+  "सिल्क साड़ी": "Silk saree",
   "फ्लोरल कॉटन साड़ी ब्लाउज़": "Floral cotton saree blouse",
   "हल्की फ्लोरल कॉटन साड़ी": "Light floral cotton saree",
   "फ्लैट एथनिक सैंडल": "Flat ethnic sandals",
@@ -1287,6 +1684,16 @@ const englishText = {
   "बारिश में ग्रिप वाले, आरामदायक जूते चुनें।": "Choose comfortable shoes with grip for rainy weather.",
   "गर्मी में हल्के, सांस लेने वाले और आरामदायक कपड़े चुनें।": "Choose light, breathable, comfortable clothes for warm weather.",
 
+  " + गर्म जैकेट/कोट": " + a warm jacket or coat",
+  " + गर्म शॉल": " + a warm shawl",
+  " + थर्मल इनर": " + thermal base layer",
+  "गर्म मोज़ों के साथ बंद पार्टी जूते": "Closed party shoes with warm socks",
+  " + गर्म स्कार्फ": " + a warm scarf",
+  " + हल्की वाटरप्रूफ जैकेट": " + a light waterproof jacket",
+  "जल्दी सूखने वाला ": "Quick-drying ",
+  "ग्रिप वाले वाटरप्रूफ बंद जूते": "Grippy waterproof closed-toe shoes",
+  " + छाता": " + an umbrella",
+
   "ठंड के लिए जैकेट या ब्लेज़र साथ रखें।": "Bring a jacket or blazer for cold weather.",
   "बर्फ़ की संभावना है—गर्म परतें, ऊनी मोज़े और ग्रिप वाले वाटरप्रूफ जूते रखें।": "Snow is possible—pack warm layers, wool socks, and grippy waterproof shoes.",
   "बारिश में पानी से कम खराब होने वाले जूते चुनें।": "Choose shoes that can handle rain.",
@@ -1305,7 +1712,7 @@ const englishText = {
   "पार्टी, तारीख, जगह और लुक के लिए नाम भरें।": "Enter the occasion, date, location, and name for the look.",
   "पार्टी की जानकारी सही नहीं है।": "The party details are invalid.",
   "पार्टी का नाम, मौसम और लुक के लिए नाम जाँचें।": "Check the party name, weather, and name for the look.",
-  "कपड़े के लिए सही मौसम चुनें।": "Choose a valid weather condition for this item.",
+  "पार्टी के लिए सही tag चुनें।": "Choose a valid party tag for this item.",
   "Map की जानकारी सही नहीं है।": "The map details are invalid.",
   "Map के लिए जगह और current location जाँचें।": "Check the venue and current location for the map.",
   "तुमने जानकारी बदली है; लुक फिर से बनाओ।": "You changed the details; create the look again.",
@@ -1349,11 +1756,21 @@ const englishText = {
   "सेव हो रहा है…": "Saving…",
   "लुक सेव नहीं हो पाया।": "Could not save the look.",
   "कपड़ा नहीं जुड़ पाया।": "Could not add the item.",
+  "फोटो से कपड़े का नाम और प्रकार नहीं पहचान पाए। साफ़ फोटो चुनें या AI पहचान बंद करके जोड़ें।": "Could not identify this photo. Use a clear image or turn off AI recognition to add it manually.",
+  "AI पहचान के लिए फोटो चुनें।": "Choose a photo for AI recognition.",
+  "Groq ने API key या मॉडल access अस्वीकार किया। backend/.env में GROQ_API_KEY जाँचें।": "Groq rejected the API key or model access. Check GROQ_API_KEY in backend/.env.",
+  "Groq की rate limit या usage limit पूरी है। थोड़ी देर बाद फिर कोशिश करें।": "The Groq rate or usage limit has been reached. Please try again later.",
+  "Groq ने फोटो request अस्वीकार की। Flask terminal में कारण देखें।": "Groq rejected the photo request. Check the Flask terminal for details.",
+  "Groq से फोटो पहचान सेवा अभी उपलब्ध नहीं है। Flask terminal देखें और फिर कोशिश करें।": "Photo recognition is temporarily unavailable from Groq. Check the Flask terminal and retry.",
   "कपड़े का नाम लिखें या फोटो चुनें।": "Enter an item name or choose a photo.",
   "एक बार में अधिकतम 20 फोटो चुनें।": "Choose up to 20 photos at a time.",
   "जोड़ा जा रहा है…": "Adding…",
   "＋ अलमारी में जोड़ो": "＋ Add to wardrobe",
   "अलमारी लोड नहीं हो पाई।": "Could not load the wardrobe.",
+  "कपड़े की जानकारी सही नहीं है।": "The wardrobe item details are invalid.",
+  "कपड़े का नाम या पार्टी tag बदलें।": "Update the item name or party tag.",
+  "कपड़े की जानकारी अपडेट कर दी गई।": "The wardrobe item was updated.",
+  "कपड़े का पार्टी tag बदल दिया गया।": "The party tag was updated.",
   "कपड़ा हटाया नहीं जा सका।": "Could not remove the item.",
   "सेव किए लुक लोड नहीं हो पाए।": "Could not load saved looks.",
   "लुक हटाया नहीं जा सका।": "Could not delete the look.",
@@ -1362,7 +1779,7 @@ const englishText = {
   "इस browser में location की सुविधा उपलब्ध नहीं है।": "This browser does not support location access.",
   "Location की अनुमति नहीं मिली। Browser में अनुमति देकर फिर कोशिश करें।": "Location permission was denied. Allow it in your browser and retry.",
   "आपकी current location नहीं मिल पाई। उपलब्ध होने पर फिर कोशिश करें।": "Could not read your current location. Retry when location is available.",
-  "LOOKBOOK के अंदर का sample कपड़ों का catalog देखें": "Browse LOOKBOOK's built-in clothing catalog",
+  "पार्टी आउटफिट प्लानर का sample कपड़ों का catalog देखें": "Browse Party Outfit Planner's built-in clothing catalog",
   "पूरी sample अलमारी जोड़ें": "Add the full sample wardrobe",
   "sample items आपकी अलमारी में जोड़ दिए गए।": "sample items were added to your wardrobe.",
   "आपकी अलमारी में sample items पहले से हैं।": "Sample items are already in your wardrobe.",
@@ -1432,6 +1849,7 @@ function setOption(selector, english) {
 
 function setDatalistOptions(id, hindiValues, englishValues) {
   const list = document.getElementById(id);
+  if (!list) return;
   const values = appLanguage === "en" ? englishValues : hindiValues;
   list.replaceChildren(...values.map((value) => {
     const option = document.createElement("option");
@@ -1478,48 +1896,56 @@ function applyPageLanguage() {
     ["शादी की पार्टी", "बर्थडे पार्टी", "कैज़ुअल पार्टी", "नाइट पार्टी"],
     ["Wedding party", "Birthday party", "Casual party", "Night party"]
   );
-  setEnglish(".form-panel .primary-button span:first-child", "Suggest a look from my wardrobe");
+  setEnglish(
+    ".form-panel .primary-button span:first-child",
+    "Suggest a party look",
+    false,
+    "मेरी पार्टी का लुक बताओ"
+  );
 
   setEnglish(".result-panel .eyebrow", "MADE FOR YOUR PLAN", false, "तुम्हारे प्लान के लिए");
   setEnglish(".result-panel h2", "Your look");
+  setEnglish("#wearTitle", "Recommended outfit for you");
+  setEnglish("#avoidTitle", "Avoid these");
   setEnglish("#weatherOutfitTitle", "What to wear for this weather");
-  setEnglish("#resultPlaceholder p", "Choose a party, date, and location.<br>Your weather-matched wardrobe look will appear here.", true);
+  setEnglish("#googleImagesButton", "See this look on Google Images ↗");
+  setEnglish("#resultPlaceholder p", "Choose a party, date, and location.<br>Your party and weather look will appear here.", true);
   setEnglish("#designIdea .eyebrow", "DESIGN INSPIRATION", false, "डिज़ाइन की झलक");
   setEnglish("#colorIdeasTitle", "Clothing and shoe color combinations");
   setEnglish("#saveButton span", "Save this look");
+  setEnglish("#nextOutfitButton span", "Next outfit combination");
   setEnglish("#saveHint", "Create a look first; then you can save it.", false, "पहले लुक बनाओ; फिर इसे सेव कर पाओगे।");
-  document.querySelectorAll(".outfit-item small").forEach((item, index) => {
-    const labels = ["Top", "Bottom", "Shoes", "Accessory", "Glasses"];
-    const original = ["ऊपर", "नीचे", "जूते", "एक्सेसरी", "चश्मा"];
+  document.querySelectorAll(".outfit-category-label").forEach((item, index) => {
+    const labels = ["Top", "Bottom", "Shoes", "Accessory", "Glasses", "Perfume"];
+    const original = ["ऊपर", "नीचे", "जूते", "एक्सेसरी", "चश्मा", "परफ्यूम"];
     item.textContent = appLanguage === "en" ? labels[index] : original[index];
   });
   updateOutfitItemLabels(
     currentSelection?.audience,
     currentOutfit?.item_categories?.bottom || currentSelection?.outfit_type
   );
+  if (currentOutfit) renderSavedWardrobeItems(currentOutfit);
 
   setEnglish(".wardrobe-section .eyebrow", "MY CLOSET", false, "मेरी अलमारी");
   setEnglish(".wardrobe-section h2", "My wardrobe");
-  setEnglish("#wardrobeCategoryPicker legend", "What are you adding?");
-  setEnglish('[data-wardrobe-category="top"] .wardrobe-category-name', "Shirt / top");
-  setEnglish('[data-wardrobe-category="bottom"] .wardrobe-category-name', "Pants");
-  setEnglish('[data-wardrobe-category="shorts"] .wardrobe-category-name', "Shorts");
-  setEnglish('[data-wardrobe-category="saree"] .wardrobe-category-name', "Saree");
-  setEnglish('[data-wardrobe-category="salwar"] .wardrobe-category-name', "Salwar suit");
-  setEnglish('[data-wardrobe-category="lehenga"] .wardrobe-category-name', "Lehenga");
-  setEnglish('[data-wardrobe-category="kurti"] .wardrobe-category-name', "Kurti");
-  setEnglish('[data-wardrobe-category="shoes"] .wardrobe-category-name', "Shoes");
-  setEnglish('[data-wardrobe-category="eyewear"] .wardrobe-category-name', "Glasses");
-  setEnglish('[data-wardrobe-category="accessory"] .wardrobe-category-name', "Watch / belt / bag");
-  setEnglish('[data-wardrobe-category="perfume"] .wardrobe-category-name', "Perfume");
-  setEnglish("#emptyWardrobeLook", "No saved wardrobe items match this person and weather yet. Add clothes to My Closet first.");
+  setEnglish('label[for="wardrobeCategory"]', "Clothing category");
+  setOption('#wardrobeCategory option[value="top"]', "Shirt / top");
+  setOption('#wardrobeCategory option[value="bottom"]', "Pants");
+  setOption('#wardrobeCategory option[value="shorts"]', "Shorts");
+  setOption('#wardrobeCategory option[value="saree"]', "Saree");
+  setOption('#wardrobeCategory option[value="salwar"]', "Salwar suit");
+  setOption('#wardrobeCategory option[value="lehenga"]', "Lehenga");
+  setOption('#wardrobeCategory option[value="kurti"]', "Kurti");
+  setOption('#wardrobeCategory option[value="shoes"]', "Shoes");
+  setOption('#wardrobeCategory option[value="accessory"]', "Watch / belt / bag");
+  setEnglish("#emptyWardrobeLook", "No saved wardrobe items match this party and person yet. Add clothes to My Closet first.");
   setEnglish('label[for="wardrobeSearch"]', "Search your wardrobe");
   setEnglish("#wardrobeSearch", "shirt, pants, shoes, watch…");
   setEnglish("#wardrobeSearchEmpty", "No matching clothing item was found.");
   setEnglish('label[for="wardrobeName"]', "Item name (optional)");
-  setEnglish("#wardrobeNameHint", "For multiple photos, each item name comes from its file name. The item type is detected automatically.");
+  setEnglish("#wardrobeNameHint", "AI names each photo automatically; for one photo, type your own name to keep it.");
   setEnglish('label[for="wardrobeAudience"]', "Who is this item for?");
-  setEnglish('label[for="wardrobeWeather"]', "Suitable weather");
+  setEnglish('label[for="wardrobeParty"]', "Search party name", false, "पार्टी का नाम चुनें");
   setEnglish("#wardrobeName", "e.g. Oxford shirt");
   setOption('#wardrobeAudience option[value="adult"]', "Adult");
   setOption('#wardrobeAudience option[value="men"]', "Men");
@@ -1527,13 +1953,15 @@ function applyPageLanguage() {
   setOption('#wardrobeAudience option[value="children"]', "Children");
   setOption('#wardrobeAudience option[value="senior"]', "Older adult");
   setOption('#wardrobeAudience option[value="all"]', "Everyone");
-  setOption('#wardrobeWeather option[value="any"]', "All weather");
-  setOption('#wardrobeWeather option[value="warm"]', "Warm");
-  setOption('#wardrobeWeather option[value="cold"]', "Cold");
-  setOption('#wardrobeWeather option[value="rainy"]', "Rainy");
-  setEnglish('label[for="wardrobeImage"]', "Clothing photo(s) (optional)");
-  setEnglish("#wardrobeImageHint", "Choose one or more JPG, PNG, or WebP photos · up to 5 MB each");
-  setEnglish("#wardrobeBatchHint", "All selected photos will be added to the category you chose above.");
+  setOption('#wardrobeParty option[value="any"]', "All parties");
+  setOption('#wardrobeParty option[value="wedding"]', "Wedding party");
+  setOption('#wardrobeParty option[value="birthday"]', "Birthday party");
+  setOption('#wardrobeParty option[value="casual"]', "Casual party");
+  setOption('#wardrobeParty option[value="night"]', "Night party");
+  setEnglish('label[for="wardrobeImage"]', "Clothing photos (select multiple)", false, "कपड़ों की फोटो (एक से ज़्यादा चुन सकते हैं)");
+  setEnglish("#wardrobeImageHint", "Choose several photos at once. AI identifies each photo's name and category; with AI off, the filename and category above are used.");
+  setEnglish("#wardrobeAiIdentifyText", "Automatically recognize each photo's name and category");
+  setEnglish("#wardrobeAiPrivacy", "Selected photos are sent to Groq for recognition.");
   updateWardrobePhotoCount();
   setEnglish("#wardrobePhotoNote", "Selected photos are saved with their items in your wardrobe and shown with their looks.");
   setEnglish("#removeWardrobeImage", "Remove photo");
@@ -1545,19 +1973,20 @@ function applyPageLanguage() {
   }
   setEnglish("#wardrobeForm .primary-button", "＋ Add to wardrobe");
   setEnglish("#emptyWardrobe", "Your wardrobe is empty. Add your clothes above.");
-  setEnglish(".catalog-details > summary", "Browse LOOKBOOK's built-in clothing catalog");
+  setEnglish(".catalog-details > summary", "Browse Party Outfit Planner's built-in clothing catalog");
   setEnglish(".catalog-details > .catalog-privacy-note", "These are built-in sample item names and categories, not images searched from the web. Empty categories also use the app's built-in outfit catalog.");
   setEnglish("#addSampleWardrobe span", "Add the full sample wardrobe");
 
   document.title = appLanguage === "en"
-    ? "Party Outfit Planner · LOOKBOOK"
-    : "पार्टी आउटफिट प्लानर · LOOKBOOK";
+    ? "Party Outfit Planner"
+    : "पार्टी आउटफिट प्लानर";
   setEnglish(".saved-section:not(.wardrobe-section) .eyebrow", "YOUR COLLECTION", false, "तुम्हारा कलेक्शन");
   setEnglish(".saved-section:not(.wardrobe-section) h2", "Saved looks");
   setEnglish("#emptyHistory", "No looks saved yet. Create and save your first look.");
   setEnglish(".footer span:last-child", "Your style, for every party.", false, "हर पार्टी के लिए, तुम्हारा अपना स्टाइल।");
 
   if (lastOutfit) showOutfit(lastOutfit);
+  updateNextOutfitLabel();
   renderColorCombinations();
   translateVisibleMessages();
 
@@ -1568,7 +1997,11 @@ function applyPageLanguage() {
 function translateCards() {
   document.querySelectorAll("#wardrobeList .history-card").forEach((card) => {
     card.querySelectorAll("p, button").forEach((element) => {
-      if (element.tagName === "BUTTON") {
+      if (element.tagName === "BUTTON" && element.dataset.action === "rename") {
+        element.textContent = "✎";
+        element.title = appLanguage === "en" ? "Edit item name and party tag" : "नाम या पार्टी tag बदलें";
+        element.setAttribute("aria-label", element.title);
+      } else if (element.tagName === "BUTTON") {
         element.textContent = appLanguage === "en" ? "Delete" : "हटाएँ";
       } else {
         element.textContent = translateText(element.textContent);
@@ -1586,8 +2019,6 @@ function translateCards() {
 }
 
 const originalShowOutfit = showOutfit;
-let lastOutfit = null;
-let outfitTranslationRequest = 0;
 
 const outfitTranslationFields = [
   "top", "bottom", "shoes", "accessory", "weather_tip", "weather_outfit",
@@ -1655,7 +2086,8 @@ function outfitFallbackValues(outfitType) {
 
 function localizeOutfitForDisplay(outfit) {
   const localized = { ...outfit };
-  const fallback = outfitFallbackValues(currentSelection?.outfit_type);
+  const fallbackType = outfit.item_categories?.bottom || currentSelection?.outfit_type;
+  const fallback = outfitFallbackValues(fallbackType);
   let needsTranslation = false;
 
   for (const field of outfitTranslationFields) {
@@ -1692,8 +2124,8 @@ function renderLocalizedOutfit(outfit) {
   renderSavedWardrobeItems(outfit);
   document.getElementById("weatherTip").textContent = outfit.weather_tip;
   document.getElementById("weatherOutfit").textContent = outfit.weather_outfit || "";
-  document.getElementById("weatherOutfitBox").hidden = true;
-  document.querySelector(".weather-tip").hidden = true;
+  document.getElementById("weatherOutfitBox").hidden = !outfit.weather_outfit;
+  document.querySelector(".weather-tip").hidden = !outfit.weather_tip;
   renderWeatherOutfitImages(outfit);
   renderColorCombinations();
 }
@@ -1758,14 +2190,28 @@ async function loadBuiltinCatalog() {
     for (const item of data.items) {
       const card = document.createElement("article");
       card.className = "catalog-item";
+      const preview = document.createElement("div");
+      preview.className = "catalog-preview";
       const icon = document.createElement("span");
       icon.setAttribute("aria-hidden", "true");
       icon.textContent = icons[item.category] || "✨";
+      const image = document.createElement("img");
+      image.src = item.preview_url || "";
+      image.alt = translateText(item.name);
+      image.loading = "lazy";
+      image.addEventListener("error", () => {
+        image.hidden = true;
+        icon.hidden = false;
+      });
+      image.addEventListener("load", () => {
+        icon.hidden = true;
+      });
+      preview.append(icon, image);
       const name = document.createElement("strong");
       name.textContent = translateText(item.name);
       const category = document.createElement("small");
       category.textContent = translateText(categoryNames[item.category] || item.category);
-      card.append(icon, name, category);
+      card.append(preview, name, category);
       catalogElement.append(card);
     }
   } catch (error) {

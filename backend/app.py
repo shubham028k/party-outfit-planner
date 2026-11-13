@@ -10,6 +10,7 @@ from datetime import datetime, time, timedelta, timezone
 import sqlite3
 import calendar
 import json
+import base64
 import math
 import os
 import re
@@ -53,7 +54,7 @@ OUTFITS = {
         ],
         "bold": [
             "मरून टेक्सचर्ड शर्ट", "ब्लैक जींस",
-            "ब्लैक बूट्स", "सिल्वर ब्रेसलेट"
+            "सफ़ेद पार्टी स्नीकर्स", "सिल्वर ब्रेसलेट"
         ]
     },
     "wedding": {
@@ -375,6 +376,38 @@ PARTY_NAMES = {
     "night": "नाइट पार्टी"
 }
 
+GOOGLE_IMAGE_PARTY_TERMS = {
+    "wedding": "Indian wedding guest outfit",
+    "birthday": "Indian birthday party outfit",
+    "casual": "Indian casual party outfit",
+    "night": "Indian night party outfit"
+}
+GOOGLE_IMAGE_AUDIENCE_TERMS = {
+    "men": "for men",
+    "women": "for women",
+    "children": "for children",
+    "senior": "comfortable outfit for older adults"
+}
+GOOGLE_IMAGE_STYLE_TERMS = {
+    "casual": "casual style",
+    "smart": "smart style",
+    "bold": "bold style"
+}
+
+
+def google_images_search_url(party_type, audience, style, outfit):
+    query_parts = [
+        GOOGLE_IMAGE_PARTY_TERMS[party_type],
+        GOOGLE_IMAGE_AUDIENCE_TERMS[audience],
+        GOOGLE_IMAGE_STYLE_TERMS[style],
+        *(outfit.get(field, "") for field in ("top", "bottom", "shoes"))
+    ]
+    query = " ".join(
+        part.strip() for part in query_parts
+        if isinstance(part, str) and part.strip()
+    )
+    return "https://www.google.com/search?" + urlencode({"tbm": "isch", "q": query})
+
 STYLE_NAMES = {
     "casual": "कैज़ुअल",
     "smart": "स्मार्ट",
@@ -387,6 +420,7 @@ CATEGORIES = {
 WARDROBE_AUDIENCES = {
     "men", "women", "adult", "children", "senior", "all"
 }
+WARDROBE_PARTY_TAGS = {"any", *PARTY_NAMES.keys()}
 WARDROBE_WEATHER = {"any", "warm", "cold", "rainy"}
 REGIONAL_LOCATION_CENTERS = {
     "rajasthan": (26.5, 73.8),
@@ -635,6 +669,7 @@ def initialize_database():
                 color TEXT NOT NULL DEFAULT '',
                 size TEXT NOT NULL DEFAULT 'any',
                 weather TEXT NOT NULL DEFAULT 'any',
+                party_tag TEXT NOT NULL DEFAULT 'any',
                 created_at TEXT NOT NULL,
                 user_id INTEGER NOT NULL DEFAULT 1,
                 image_data BLOB,
@@ -678,7 +713,8 @@ def initialize_database():
         for column, definition in (
             ("image_data", "BLOB"),
             ("image_mime", "TEXT"),
-            ("weather", "TEXT NOT NULL DEFAULT 'any'")
+            ("weather", "TEXT NOT NULL DEFAULT 'any'"),
+            ("party_tag", "TEXT NOT NULL DEFAULT 'any'")
         ):
             if column not in wardrobe_columns:
                 connection.execute(
@@ -734,8 +770,35 @@ BUILTIN_CATALOG = [
     {"name": "एम्ब्रॉयडर्ड साड़ी", "category": "saree"},
     {"name": "पार्टी लहंगा", "category": "lehenga"}
 ]
+CATALOG_PREVIEW_EMOJI = {
+    "top": "👕", "bottom": "👖", "shorts": "🩳", "shoes": "👟",
+    "accessory": "⌚", "eyewear": "👓", "perfume": "🧴", "kurti": "👚",
+    "salwar": "👗", "saree": "🥻", "lehenga": "👗"
+}
+CATALOG_PREVIEW_COLORS = (
+    ("#302a58", "#7560c8"), ("#3d2745", "#df7fa7"),
+    ("#203f4a", "#60b9c4"), ("#493624", "#ddaa62")
+)
 MAX_CALENDAR_EVENTS = 2000
 MAX_WARDROBE_IMAGE_SIZE = 5 * 1024 * 1024
+
+
+def catalog_preview_svg(item_index):
+    """Return a local, deterministic preview for a built-in catalog item."""
+    item = BUILTIN_CATALOG[item_index]
+    start_color, end_color = CATALOG_PREVIEW_COLORS[
+        item_index % len(CATALOG_PREVIEW_COLORS)
+    ]
+    icon = CATALOG_PREVIEW_EMOJI.get(item["category"], "✨")
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 420" role="img" aria-label="Catalog clothing preview">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="{start_color}"/><stop offset="1" stop-color="{end_color}"/></linearGradient></defs>
+  <rect width="360" height="420" rx="30" fill="url(#bg)"/>
+  <circle cx="292" cy="70" r="74" fill="#ffffff" fill-opacity=".12"/>
+  <circle cx="70" cy="350" r="95" fill="#ffffff" fill-opacity=".08"/>
+  <text x="180" y="244" text-anchor="middle" font-size="156">{icon}</text>
+  <rect x="38" y="330" width="284" height="44" rx="22" fill="#101023" fill-opacity=".35"/>
+  <text x="180" y="359" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="19" font-weight="700">PARTY OUTFIT</text>
+</svg>""".encode("utf-8")
 
 
 def normalize_wardrobe_image(image_data):
@@ -1404,29 +1467,312 @@ def weather_for_event(location, event_date):
         )
 
 
+PARTY_ITEM_KEYWORDS = {
+    "wedding": (
+        ("formal", "blazer", "suit", "kurta", "sherwani", "saree", "sari", "lehenga", "salwar", "festive", "embroidered", "ethnic", "blouse", "loafers", "heels", "jewelry", "शादी", "विवाह", "औपचारिक", "ब्लेज़र", "सूट", "कुर्ता", "शेरवानी", "साड़ी", "लहंगा", "सलवार", "उत्सवी", "कढ़ाई", "एथनिक", "जूती", "हील", "गहना", "आभूषण"),
+        ("shorts", "flip-flop", "sportswear", "शॉर्ट्स", "चप्पल", "स्पोर्ट्स")
+    ),
+    "birthday": (
+        ("birthday", "bright", "colorful", "colourful", "graphic", "printed", "pattern", "party", "bold", "neon", "floral", "sequin", "जन्मदिन", "बर्थडे", "रंगीन", "ग्राफिक", "प्रिंटेड", "पार्टी", "बोल्ड", "फ्लोरल", "पेस्टल"),
+        ()
+    ),
+    "casual": (
+        ("casual", "t-shirt", "tshirt", "jeans", "denim", "sneakers", "shorts", "kurti", "relaxed", "कैज़ुअल", "टी-शर्ट", "जींस", "डेनिम", "स्नीकर्स", "शॉर्ट्स", "कुर्ती", "आरामदायक"),
+        ("tuxedo", "evening gown", "टक्सीडो")
+    ),
+    "night": (
+        ("black", "dark", "bold", "night", "party", "metallic", "shimmer", "sequin", "boots", "heels", "blazer", "satin", "wine", "काला", "गहरा", "बोल्ड", "नाइट", "मेटैलिक", "चमकदार", "बूट", "हील", "साटन", "वाइन"),
+        ("pajama", "sleepwear", "flip-flop", "पायजामा", "नाइट सूट", "चप्पल")
+    )
+}
+
+
+PARTY_CATEGORY_EXCLUSIONS = {
+    "wedding": {
+        "top": (
+            "t-shirt", "t shirt", "tshirt", "tee", "graphic", "hoodie",
+            "sweatshirt", "jersey", "sportswear", "टी-शर्ट", "टी शर्ट",
+            "टीशर्ट", "ग्राफिक", "हुडी", "हूडी", "स्वेटशर्ट", "जर्सी",
+            "स्पोर्ट्सवियर"
+        ),
+        "bottom": (
+            "jeans", "denim", "shorts", "joggers", "track pants",
+            "trackpants", "sweatpants", "leggings", "cargo",
+            "जींस", "जीन", "डेनिम", "शॉर्ट्स", "जॉगर्स", "ट्रैक पैंट",
+            "लेगिंग", "कार्गो"
+        ),
+        "shorts": ("shorts", "शॉर्ट्स"),
+        "shoes": (
+            "sneaker", "trainers", "running shoes", "sports shoes",
+            "flip-flop", "flip flop", "slippers", "crocs", "स्नीकर्स",
+            "स्पोर्ट्स शूज", "चप्पल", "स्लीपर", "क्रॉक्स"
+        )
+    },
+    "night": {
+        "top": ("pajama", "sleepwear", "night suit", "पायजामा", "नाइट सूट"),
+        "bottom": ("pajama", "sleepwear", "night suit", "पायजामा", "नाइट सूट"),
+        "shoes": ("flip-flop", "flip flop", "slippers", "चप्पल", "स्लीपर")
+    }
+}
+
+
+def party_item_score(name, party_type):
+    positive, negative = PARTY_ITEM_KEYWORDS.get(party_type, ((), ()))
+    normalized_name = name.casefold()
+    return (
+        sum(2 for keyword in positive if keyword in normalized_name)
+        - sum(3 for keyword in negative if keyword in normalized_name)
+    )
+
+
+def party_item_is_compatible(name, category, party_type):
+    exclusions = PARTY_CATEGORY_EXCLUSIONS.get(party_type, {}).get(category, ())
+    normalized_name = re.sub(r"[\W_]+", "", name.casefold())
+    return not any(
+        re.sub(r"[\W_]+", "", term.casefold()) in normalized_name
+        for term in exclusions
+    )
+
+
+FORMAL_ITEM_TERMS = (
+    "kurta", "sherwani", "bandhgala", "blazer", "formal", "suit",
+    "saree", "sari", "lehenga", "salwar", "embroidered", "ethnic",
+    "festive", "silk", "कुर्ता", "शेरवानी", "बंदगला", "ब्लेज़र",
+    "औपचारिक", "सूट", "साड़ी", "लहंगा", "सलवार", "कढ़ाई", "एथनिक",
+    "उत्सवी", "रेशम"
+)
+CASUAL_ITEM_TERMS = (
+    "t-shirt", "t shirt", "tshirt", "tee", "jeans", "denim", "jogger",
+    "track", "sport", "sneaker", "cargo", "shorts", "hoodie", "graphic",
+    "polo", "side stripe", "striped", "टी-शर्ट", "टी शर्ट", "टीशर्ट",
+    "जींस", "डेनिम", "जॉगर्स", "ट्रैक", "स्पोर्ट्स", "स्नीकर्स", "कार्गो",
+    "शॉर्ट्स", "हुडी", "हूडी", "ग्राफिक", "धारीदार"
+)
+OUTFIT_PATTERN_TERMS = {
+    "stripe": ("stripe", "striped", "धारी", "धारीदार"),
+    "check": ("check", "checked", "plaid", "चेक"),
+    "floral": ("floral", "फ्लोरल", "फूल"),
+    "print": ("print", "printed", "pattern", "ग्राफिक", "प्रिंट", "पैटर्न"),
+    "embroidery": ("embroidered", "embroidery", "कढ़ाई", "एम्ब्रॉयडरी"),
+}
+OUTFIT_COLOR_ALIASES = {
+    "grey": "gray", "ग्रे": "gray", "धूसर": "gray",
+    "गुलाबी": "pink", "काला": "black", "काली": "black",
+    "सफेद": "white", "सफ़ेद": "white", "नीला": "blue", "नीली": "blue",
+    "नेवी": "navy", "बेज": "beige", "क्रीम": "cream", "भूरा": "brown",
+    "भूरी": "brown", "लाल": "red", "मरून": "maroon", "हरा": "green",
+    "जैतून": "olive", "बैंगनी": "purple", "सुनहरा": "gold", "गोल्ड": "gold",
+    "सिल्वर": "silver"
+}
+NEUTRAL_OUTFIT_COLORS = {"black", "white", "gray", "navy", "beige", "cream", "tan", "brown"}
+
+
+def normalized_outfit_text(value):
+    return re.sub(r"[\W_]+", "", value.casefold())
+
+
+def outfit_formality(name):
+    normalized = normalized_outfit_text(name)
+    if any(normalized_outfit_text(term) in normalized for term in FORMAL_ITEM_TERMS):
+        return 2
+    if any(normalized_outfit_text(term) in normalized for term in CASUAL_ITEM_TERMS):
+        return 0
+    return 1
+
+
+def outfit_pattern(name):
+    normalized = normalized_outfit_text(name)
+    for pattern, terms in OUTFIT_PATTERN_TERMS.items():
+        if any(normalized_outfit_text(term) in normalized for term in terms):
+            return pattern
+    return None
+
+
+def outfit_colors(name):
+    words = re.findall(r"[a-z]+|[\u0900-\u097f]+", name.casefold())
+    colors = set()
+    for word in words:
+        if word in OUTFIT_COLOR_ALIASES:
+            colors.add(OUTFIT_COLOR_ALIASES[word])
+        elif word in {
+            "pink", "black", "white", "gray", "blue", "navy", "beige", "cream",
+            "tan", "brown", "red", "maroon", "green", "olive", "purple", "gold", "silver"
+        }:
+            colors.add(word)
+    return colors
+
+
+def outfit_pair_is_compatible(top, bottom, party_type=None):
+    if not isinstance(top, str) or not isinstance(bottom, str):
+        return True
+
+    top_formality = outfit_formality(top)
+    bottom_formality = outfit_formality(bottom)
+    if abs(top_formality - bottom_formality) >= 2:
+        return False
+
+    top_pattern = outfit_pattern(top)
+    bottom_pattern = outfit_pattern(bottom)
+    top_colors = outfit_colors(top)
+    bottom_colors = outfit_colors(bottom)
+    if top_pattern and bottom_pattern and top_pattern != bottom_pattern:
+        return bool(top_colors & bottom_colors)
+
+    top_normalized = normalized_outfit_text(top)
+    bottom_normalized = normalized_outfit_text(bottom)
+    traditional_top = any(
+        normalized_outfit_text(term) in top_normalized
+        for term in ("kurta", "sherwani", "bandhgala", "कुर्ता", "शेरवानी", "बंदगला")
+    )
+    athletic_bottom = any(
+        normalized_outfit_text(term) in bottom_normalized
+        for term in ("track", "jogger", "side stripe", "sportswear", "ट्रैक", "जॉगर्स", "धारीदार")
+    )
+    if traditional_top and athletic_bottom:
+        return False
+    return True
+
+
+def outfit_pair_score(top, bottom):
+    if not isinstance(top, str) or not isinstance(bottom, str):
+        return 0
+    score = 2 - abs(outfit_formality(top) - outfit_formality(bottom))
+    top_pattern = outfit_pattern(top)
+    bottom_pattern = outfit_pattern(bottom)
+    if top_pattern and top_pattern == bottom_pattern:
+        score += 1
+    top_colors = outfit_colors(top)
+    bottom_colors = outfit_colors(bottom)
+    if top_colors & bottom_colors:
+        score += 2
+    elif top_colors and bottom_colors and (
+        top_colors & NEUTRAL_OUTFIT_COLORS or bottom_colors & NEUTRAL_OUTFIT_COLORS
+    ):
+        score += 1
+    return score
+
+
+def weather_adjusted_suggestion(item, category, weather, audience):
+    if not item:
+        return item
+    normalized = item.casefold()
+
+    def has_any(*terms):
+        return any(term in normalized for term in terms)
+
+    if weather == "cold":
+        if category in {"top", "saree", "salwar", "lehenga", "kurti"}:
+            if has_any(
+                "jacket", "coat", "sweater", "thermal", "wool", "shawl",
+                "जैकेट", "कोट", "स्वेटर", "थर्मल", "ऊन", "शॉल"
+            ):
+                return item
+            layer = "गर्म शॉल" if audience == "women" else "गर्म जैकेट/कोट"
+            return f"{item} + {layer}"
+        if category in {"bottom", "shorts"}:
+            if has_any("thermal", "wool", "ऊन", "थर्मल", "fleece", "फ्लीस"):
+                return item
+            return f"{item} + थर्मल इनर"
+        if category == "shoes":
+            if has_any("warm socks", "गर्म मोज़े", "ऊनी मोज़े"):
+                return item
+            return f"{item} + गर्म मोज़े"
+        if category == "accessory":
+            if has_any("scarf", "shawl", "स्कार्फ", "शॉल"):
+                return item
+            return f"{item} + गर्म स्कार्फ"
+    elif weather == "rainy":
+        if category in {"top", "saree", "salwar", "lehenga", "kurti"}:
+            if has_any("waterproof", "raincoat", "rain jacket", "वाटरप्रूफ", "बरसाती"):
+                return item
+            return f"{item} + हल्की वाटरप्रूफ जैकेट"
+        if category in {"bottom", "shorts"}:
+            if has_any("quick-drying", "quick drying", "जल्दी सूख", "waterproof", "वाटरप्रूफ"):
+                return item
+            return f"जल्दी सूखने वाला {item}"
+        if category == "shoes":
+            if has_any("waterproof", "water-resistant", "grip", "ग्रिप", "वाटरप्रूफ", "पानी से बचाव"):
+                return item
+            return f"{item} (ग्रिप और पानी से बचाव वाला जोड़ा चुनें)"
+        if category == "accessory":
+            if has_any("umbrella", "छाता"):
+                return item
+            return f"{item} + छाता"
+    return item
+
+
+def weather_item_is_compatible(name, category, weather):
+    """Reject saved items that conflict with the selected weather.
+
+    Users can save an item as "all weather", so its saved weather tag is not
+    enough by itself. The item's own name still prevents a winter coat from
+    being picked for a warm-day result.
+    """
+    if weather not in {"warm", "cold", "rainy"}:
+        return True
+    normalized = name.casefold()
+
+    def has_any(*terms):
+        return any(term in normalized for term in terms)
+
+    winter_layers = (
+        "coat", "jacket", "blazer", "sweater", "hoodie", "thermal",
+        "wool", "fleece", "overcoat", "जैकेट", "कोट", "ब्लेज़र",
+        "स्वेटर", "हुडी", "हूडी", "थर्मल", "ऊन", "फ्लीस"
+    )
+    cold_weather_items = (
+        "shorts", "sandal", "flip-flop", "slipper", "शॉर्ट्स",
+        "सैंडल", "चप्पल", "स्लीपर"
+    )
+    if weather == "warm":
+        if category in {"top", "saree", "salwar", "lehenga", "kurti"}:
+            return not has_any(*winter_layers)
+        if category in {"bottom", "shorts"}:
+            return not has_any("thermal", "wool", "fleece", "थर्मल", "ऊन", "फ्लीस")
+        if category == "shoes":
+            return not has_any("snow boot", "winter boot", "ऊन के बूट")
+    if weather == "cold":
+        if category in {"shorts", "shoes"}:
+            return not has_any(*cold_weather_items)
+    return True
+
+
+# Closet categories that may be used for any party without a party keyword.
+NEUTRAL_PARTY_CATEGORIES = {"bottom", "shorts"}
+
+
 def wardrobe_pick(
-    user_id, category, fallback, audience, include_image=False, weather="any"
+    user_id, category, fallback, audience, include_image=False, weather="any",
+    universal=False, party_type=None, include_source=False, match_with=None,
+    occasion_specific=False, variation=0
 ):
     wardrobe_audiences = wardrobe_audience_options(audience)
     audience_placeholders = ", ".join("?" for _ in wardrobe_audiences)
     with connect_db() as connection:
         items = connection.execute(
-            f"""SELECT id, name, image_data IS NOT NULL AS has_image
+            f"""SELECT id, name, audience, weather, party_tag,
+                      image_data IS NOT NULL AS has_image
                FROM wardrobe_items
                WHERE user_id = ? AND category = ?
-                 AND audience IN ({audience_placeholders}, 'all')
+                 AND (? = 1 OR audience IN ({audience_placeholders}, 'all'))
+                 AND (? = 1 OR party_tag IN (?, 'any'))
                  AND (? = 'any' OR weather IN (?, 'any'))
-               ORDER BY CASE WHEN ? != 'any' AND weather = ? THEN 0 ELSE 1 END,
+               ORDER BY CASE WHEN party_tag = ? THEN 0 ELSE 1 END,
+                        CASE WHEN ? != 'any' AND weather = ? THEN 0 ELSE 1 END,
                         CASE WHEN audience = ? THEN 0
                              WHEN audience = 'adult' THEN 1 ELSE 2 END,
-                        RANDOM()
+                        id DESC
                LIMIT 50""",
             (
                 user_id,
                 category,
+                int(universal),
                 *wardrobe_audiences,
+                int(party_type is None),
+                party_type or "any",
                 weather,
                 weather,
+                party_type or "any",
                 weather,
                 weather,
                 audience
@@ -1447,19 +1793,59 @@ def wardrobe_pick(
             "साड़ी", "सलवार", "जींस", "जीन", "ट्राउज़र", "पैंट", "शॉर्ट्स"
         )
     }.get(category, ())
-    item = next((
+    compatible_items = [
         candidate for candidate in items
         if not any(term in candidate["name"].casefold() for term in incompatible_terms)
-    ), None)
+        # An item the user explicitly tagged for this weather (for example a
+        # blazer saved as "warm") is trusted. The name-based check only guards
+        # items saved as "any" weather.
+        and (
+            (weather != "any" and candidate["weather"] == weather)
+            or weather_item_is_compatible(candidate["name"], category, weather)
+        )
+        and party_item_is_compatible(candidate["name"], category, party_type)
+        and outfit_pair_is_compatible(match_with, candidate["name"], party_type)
+        and (
+            not occasion_specific
+            or candidate["party_tag"] == party_type
+            or party_item_score(candidate["name"], party_type) > 0
+            # Plain bottoms (jeans, trousers, pants) are neutral: they need no
+            # party keyword in the name, only to not clash with the party.
+            or (
+                category in NEUTRAL_PARTY_CATEGORIES
+                and party_item_score(candidate["name"], party_type) >= 0
+            )
+        )
+    ]
+    ranked_items = sorted(
+        compatible_items,
+        key=lambda candidate: (
+            int(weather != "any" and candidate["weather"] == weather),
+            int(candidate["audience"] == audience),
+            outfit_pair_score(match_with, candidate["name"]),
+            party_item_score(candidate["name"], party_type)
+        ),
+        reverse=True
+    )
+    item = (
+        ranked_items[variation % len(ranked_items)]
+        if ranked_items else None
+    )
 
     if not item:
-        return (fallback, None) if include_image else fallback
+        if include_image:
+            result = (fallback, None)
+            return (*result, False) if include_source else result
+        return (fallback, False) if include_source else fallback
 
     image_url = (
         url_for("get_wardrobe_image", item_id=item["id"])
         if item["has_image"] else None
     )
-    return (item["name"], image_url) if include_image else item["name"]
+    if include_image:
+        result = (item["name"], image_url)
+        return (*result, True) if include_source else result
+    return (item["name"], True) if include_source else item["name"]
 
 
 def eyewear_suggestion(audience):
@@ -1476,10 +1862,133 @@ def perfume_suggestion(audience):
     return "हल्की खुशबू वाला परफ्यूम; थोड़ी मात्रा में लगाएँ।"
 
 
+OUTFIT_COLOR_ALIASES = (
+    (("off-white", "off white", "ऑफ-व्हाइट", "ऑफ व्हाइट"), "ऑफ-व्हाइट", "off-white"),
+    (("navy blue", "नेवी ब्लू"), "नेवी ब्लू", "navy blue"),
+    (("charcoal", "चारकोल"), "चारकोल", "charcoal"),
+    (("burgundy", "maroon", "मरून"), "मरून", "maroon"),
+    (("beige", "बेज"), "बेज", "beige"),
+    (("ivory", "आइवरी"), "आइवरी", "ivory"),
+    (("cream", "क्रीम"), "क्रीम", "cream"),
+    (("olive", "ऑलिव"), "ऑलिव", "olive"),
+    (("navy", "नेवी"), "नेवी", "navy"),
+    (("white", "सफ़ेद", "सफेद"), "सफ़ेद", "white"),
+    (("black", "ब्लैक", "काला", "काली"), "काला", "black"),
+    (("gray", "grey", "ग्रे"), "ग्रे", "gray"),
+    (("blue", "नीला", "नीली", "ब्लू"), "नीला", "blue"),
+    (("pink", "पिंक", "गुलाबी"), "गुलाबी", "pink"),
+    (("red", "लाल"), "लाल", "red"),
+    (("green", "हरा", "हरी", "ग्रीन"), "हरा", "green"),
+    (("gold", "गोल्ड", "सुनहरा"), "गोल्ड", "gold"),
+    (("silver", "सिल्वर", "चांदी"), "सिल्वर", "silver"),
+    (("brown", "ब्राउन", "भूरा"), "भूरा", "brown"),
+    (("tan", "टैन"), "टैन", "tan"),
+    (("wine", "वाइन"), "वाइन", "wine"),
+    (("purple", "बैंगनी", "पर्पल"), "बैंगनी", "purple"),
+    (("rust", "रस्ट"), "रस्ट", "rust"),
+    (("yellow", "पीला", "पीली"), "पीला", "yellow")
+)
+
+COLOR_PAIRINGS_BY_TOP = {
+    "ivory": ("नेवी या चारकोल पैंट", "टैन या ब्राउन जूते", "navy or charcoal trousers", "tan or brown shoes"),
+    "white": ("नेवी या चारकोल पैंट", "टैन या सफ़ेद जूते", "navy or charcoal trousers", "tan or white shoes"),
+    "cream": ("नेवी या ऑलिव पैंट", "टैन जूते", "navy or olive trousers", "tan shoes"),
+    "beige": ("नेवी या सफ़ेद पैंट", "टैन जूते", "navy or white trousers", "tan shoes"),
+    "pink": ("क्रीम या ग्रे पैंट", "सफ़ेद या टैन जूते", "cream or gray trousers", "white or tan shoes"),
+    "red": ("क्रीम या काली पैंट", "काले या टैन जूते", "cream or black trousers", "black or tan shoes"),
+    "maroon": ("क्रीम या चारकोल पैंट", "टैन जूते", "cream or charcoal trousers", "tan shoes"),
+    "blue": ("बेज या क्रीम पैंट", "सफ़ेद या टैन जूते", "beige or cream trousers", "white or tan shoes"),
+    "navy": ("बेज या क्रीम पैंट", "टैन जूते", "beige or cream trousers", "tan shoes"),
+    "green": ("क्रीम या बेज पैंट", "ब्राउन जूते", "cream or beige trousers", "brown shoes"),
+    "olive": ("क्रीम या ऑफ-व्हाइट पैंट", "ब्राउन जूते", "cream or off-white trousers", "brown shoes"),
+    "black": ("ग्रे या क्रीम पैंट", "काले जूते", "gray or cream trousers", "black shoes"),
+    "gray": ("नेवी या मरून पैंट", "काले जूते", "navy or maroon trousers", "black shoes"),
+    "charcoal": ("क्रीम या हल्के ग्रे पैंट", "काले जूते", "cream or light gray trousers", "black shoes"),
+    "gold": ("नेवी या काली पैंट", "टैन जूते", "navy or black trousers", "tan shoes"),
+    "brown": ("क्रीम या नेवी पैंट", "टैन जूते", "cream or navy trousers", "tan shoes"),
+    "tan": ("नेवी या क्रीम पैंट", "ब्राउन जूते", "navy or cream trousers", "brown shoes"),
+    "wine": ("क्रीम या चारकोल पैंट", "काले जूते", "cream or charcoal trousers", "black shoes")
+}
+
+
+def outfit_color_tip(outfit, party_type):
+    if not any(outfit.get(field) for field in ("top", "bottom", "shoes")):
+        return None
+
+    def find_color(value):
+        normalized = str(value or "").casefold()
+        for aliases, hindi, english in OUTFIT_COLOR_ALIASES:
+            if any(alias in normalized for alias in aliases):
+                return hindi, english
+        return None
+
+    top_color = find_color(outfit.get("top"))
+    bottom_color = find_color(outfit.get("bottom"))
+    shoes_color = find_color(outfit.get("shoes"))
+    if top_color and bottom_color:
+        colors_hi = f"{top_color[0]} + {bottom_color[0]}"
+        colors_en = f"{top_color[1]} + {bottom_color[1]}"
+        if shoes_color:
+            colors_hi += f" + {shoes_color[0]}"
+            colors_en += f" + {shoes_color[1]}"
+        if party_type == "wedding":
+            hindi_note = "शादी के लिए सलीकेदार मेल है; बेल्ट या घड़ी को जूतों के रंग में रखें।"
+            english_note = "is a polished wedding combination; match your belt or watch to the shoes."
+        elif party_type == "birthday":
+            hindi_note = "बर्थडे के लिए संतुलित मेल है; चाहें तो एक चमकीली एक्सेसरी जोड़ें।"
+            english_note = "is a balanced birthday combination; add one brighter accessory if you like."
+        elif party_type == "night":
+            hindi_note = "नाइट पार्टी के लिए अच्छा मेल है; सिल्वर एक्सेसरी एक चमकदार accent देगी।"
+            english_note = "works for a night party; a silver accessory adds a bright accent."
+        else:
+            hindi_note = "साथ अच्छे लगेंगे; जूते और बेल्ट को एक ही रंग-परिवार में रखें।"
+            english_note = "work well together; keep shoes and belt in the same color family."
+        return {
+            "hi": f"रंगों का मेल: {colors_hi} {hindi_note}",
+            "en": f"Color match: {colors_en} {english_note}"
+        }
+
+    if top_color and top_color[1] in COLOR_PAIRINGS_BY_TOP:
+        pants_hi, shoes_hi, pants_en, shoes_en = COLOR_PAIRINGS_BY_TOP[top_color[1]]
+        return {
+            "hi": f"रंगों का मेल: {top_color[0]} टॉप के साथ {pants_hi} और {shoes_hi} अच्छे लगेंगे।",
+            "en": f"Color match: pair a {top_color[1]} top with {pants_en} and {shoes_en}."
+        }
+
+    party_combinations = {
+        "wedding": ("आइवरी/क्रीम + मरून/नेवी + टैन/गोल्ड", "ivory/cream + maroon/navy + tan/gold"),
+        "birthday": ("चटख टॉप + नेवी/डार्क पैंट + सफ़ेद जूते", "a bright top + navy/dark trousers + white shoes"),
+        "night": ("ब्लैक/वाइन + चारकोल + सिल्वर एक्सेसरी", "black/wine + charcoal + a silver accessory"),
+        "casual": ("नेवी/ऑलिव + बेज/क्रीम + सफ़ेद या टैन जूते", "navy/olive + beige/cream + white or tan shoes")
+    }
+    hindi, english = party_combinations.get(party_type, party_combinations["casual"])
+    return {
+        "hi": f"रंगों का मेल: {hindi} इस पार्टी के लिए अच्छा रहेगा।",
+        "en": f"Color match: {english} works well for this party."
+    }
+
+
 def make_recommendation(
     user_id, party_type, weather, style, audience,
-    bottom_preference="trousers", outfit_type="any", wardrobe_only=False
+    bottom_preference="trousers", outfit_type="any", wardrobe_only=False,
+    occasion_specific=False, variation=0
 ):
+    saved_ethnic_wear = False
+    if audience == "women" and party_type == "wedding" and outfit_type == "any":
+        for ethnic_category in ("saree", "lehenga", "salwar", "kurti"):
+            ethnic_item, _, ethnic_is_saved = wardrobe_pick(
+                user_id, ethnic_category, None, audience,
+                include_image=True, weather=weather, party_type=party_type,
+                include_source=True, occasion_specific=occasion_specific,
+                variation=variation
+            )
+            if ethnic_item and ethnic_is_saved:
+                outfit_type = ethnic_category
+                saved_ethnic_wear = True
+                break
+        if not saved_ethnic_wear:
+            outfit_type = {"casual": "salwar", "smart": "saree", "bold": "lehenga"}[style]
+
     uses_ethnic_wear = audience == "women" and outfit_type in ETHNIC_OUTFIT_TYPES
     if audience == "women" and outfit_type in ETHNIC_TYPE_OUTFITS:
         defaults = ETHNIC_TYPE_OUTFITS[outfit_type][style]
@@ -1493,6 +2002,17 @@ def make_recommendation(
     if not (audience == "women" and outfit_type in ETHNIC_TYPE_OUTFITS):
         defaults = outfit_options[party_type][style]
 
+    top_suggestion = weather_adjusted_suggestion(defaults[0], "top", weather, audience)
+    shoe_suggestion = weather_adjusted_suggestion(defaults[2], "shoes", weather, audience)
+    accessory_suggestion = weather_adjusted_suggestion(defaults[3], "accessory", weather, audience)
+    top, top_image, top_saved = wardrobe_pick(
+        user_id, "top", top_suggestion, audience,
+        include_image=True, weather=weather, party_type=party_type,
+        include_source=True, occasion_specific=occasion_specific,
+        variation=variation
+    )
+    bottom_saved = False
+
     if uses_ethnic_wear:
         ethnic_bottom_category = {
             "saree": "saree",
@@ -1501,62 +2021,94 @@ def make_recommendation(
             "kurti": "bottom"
         }.get(outfit_type, "bottom")
         bottom_category = ethnic_bottom_category
-        bottom, bottom_image = wardrobe_pick(
+        bottom, bottom_image, bottom_saved = wardrobe_pick(
             user_id, ethnic_bottom_category,
-            None if wardrobe_only else defaults[1], audience,
-            include_image=True, weather=weather
+            weather_adjusted_suggestion(defaults[1], ethnic_bottom_category, weather, audience), audience,
+            include_image=True, weather=weather, party_type=party_type,
+            include_source=True, match_with=top,
+            occasion_specific=occasion_specific, variation=variation
         )
     elif bottom_preference == "shorts":
         bottom_category = "shorts"
-        bottom, bottom_image = wardrobe_pick(
+        bottom, bottom_image, bottom_saved = wardrobe_pick(
             user_id,
             "shorts",
-            None if wardrobe_only else SHORTS_OUTFITS[audience][style],
+            weather_adjusted_suggestion(SHORTS_OUTFITS[audience][style], "shorts", weather, audience),
             audience,
             include_image=True,
-            weather=weather
+            weather=weather,
+            party_type=party_type,
+            include_source=True,
+            match_with=top,
+            occasion_specific=occasion_specific, variation=variation
         )
     else:
         bottom_category = "bottom"
-        bottom, bottom_image = wardrobe_pick(
-            user_id, "bottom", None if wardrobe_only else defaults[1], audience,
-            include_image=True, weather=weather
+        bottom, bottom_image, bottom_saved = wardrobe_pick(
+            user_id, "bottom",
+            weather_adjusted_suggestion(defaults[1], bottom_category, weather, audience),
+            audience, include_image=True, weather=weather, party_type=party_type,
+            include_source=True, match_with=top,
+            occasion_specific=occasion_specific, variation=variation
         )
-        if wardrobe_only and bottom is None and bottom_preference != "shorts":
+        if wardrobe_only and not bottom_saved and bottom_preference != "shorts":
             alternate_categories = (
                 ["saree", "salwar", "lehenga", "kurti", "shorts"]
                 if audience == "women" else ["shorts"]
             )
             for alternate_category in alternate_categories:
-                bottom, bottom_image = wardrobe_pick(
+                alternate, alternate_image, alternate_saved = wardrobe_pick(
                     user_id, alternate_category, None, audience,
-                    include_image=True, weather=weather
+                    include_image=True, weather=weather, party_type=party_type,
+                    include_source=True, match_with=top,
+                    occasion_specific=occasion_specific,
+                    variation=variation
                 )
-                if bottom is not None:
+                if alternate_saved:
+                    bottom, bottom_image, bottom_saved = alternate, alternate_image, True
                     bottom_category = alternate_category
                     break
 
-    top, top_image = wardrobe_pick(
-        user_id, "top", None if wardrobe_only else defaults[0], audience,
-        include_image=True, weather=weather
+    shoes, shoes_image, shoes_saved = wardrobe_pick(
+        user_id, "shoes", shoe_suggestion, audience, include_image=True,
+        weather=weather, party_type=party_type, include_source=True,
+        occasion_specific=occasion_specific, variation=variation
     )
-    shoes, shoes_image = wardrobe_pick(
-        user_id, "shoes", None if wardrobe_only else defaults[2], audience, include_image=True,
-        weather=weather
+    accessory, accessory_image, accessory_saved = wardrobe_pick(
+        user_id, "accessory", accessory_suggestion, audience, include_image=True,
+        weather="any", universal=True, party_type=party_type, include_source=True,
+        occasion_specific=occasion_specific, variation=variation
     )
-    accessory, accessory_image = wardrobe_pick(
-        user_id, "accessory", None if wardrobe_only else defaults[3], audience, include_image=True,
-        weather=weather
+    weather_adjusted_saved_items = set()
+    saved_items_to_adjust = (
+        ("top", top, "top", top_saved),
+        ("bottom", bottom, bottom_category, bottom_saved),
+        ("shoes", shoes, "shoes", shoes_saved),
+        ("accessory", accessory, "accessory", accessory_saved),
     )
-    eyewear, eyewear_image = wardrobe_pick(
+    adjusted_saved_values = {}
+    for field, item, category, is_saved in saved_items_to_adjust:
+        if not is_saved:
+            continue
+        adjusted_item = weather_adjusted_suggestion(
+            item, category, weather, audience
+        )
+        adjusted_saved_values[field] = adjusted_item
+        if adjusted_item != item:
+            weather_adjusted_saved_items.add(field)
+    top = adjusted_saved_values.get("top", top)
+    bottom = adjusted_saved_values.get("bottom", bottom)
+    shoes = adjusted_saved_values.get("shoes", shoes)
+    accessory = adjusted_saved_values.get("accessory", accessory)
+    eyewear, eyewear_image, eyewear_saved = wardrobe_pick(
         user_id, "eyewear",
-        None if wardrobe_only else eyewear_suggestion(audience), audience,
-        include_image=True, weather=weather
+        eyewear_suggestion(audience), audience, include_image=True,
+        weather="any", universal=True, party_type=party_type, include_source=True
     )
-    perfume, perfume_image = wardrobe_pick(
+    perfume, perfume_image, perfume_saved = wardrobe_pick(
         user_id, "perfume",
-        None if wardrobe_only else perfume_suggestion(audience), audience,
-        include_image=True, weather=weather
+        perfume_suggestion(audience), audience, include_image=True,
+        weather=weather, party_type=party_type, include_source=True
     )
     outfit = {
         "top": top,
@@ -1566,6 +2118,14 @@ def make_recommendation(
         "eyewear": eyewear,
         "perfume": perfume,
         "item_categories": {"bottom": bottom_category},
+        "item_sources": {
+            "top": "saved" if top_saved else "suggested",
+            "bottom": "saved" if bottom_saved else "suggested",
+            "shoes": "saved" if shoes_saved else "suggested",
+            "accessory": "saved" if accessory_saved else "suggested",
+            "eyewear": "saved" if eyewear_saved else "suggested",
+            "perfume": "saved" if perfume_saved else "suggested"
+        },
         "item_images": {
             key: value for key, value in {
                 "top": top_image,
@@ -1580,6 +2140,36 @@ def make_recommendation(
         "style_name": STYLE_NAMES[style],
         "audience_name": AUDIENCE_NAMES[audience]
     }
+    def source_for(field, is_saved):
+        if field in weather_adjusted_saved_items:
+            return "saved_weather_adjusted"
+        return "saved" if is_saved else "suggested"
+
+    outfit["item_sources"].update({
+        "top": source_for("top", top_saved),
+        "bottom": source_for("bottom", bottom_saved),
+        "shoes": source_for("shoes", shoes_saved),
+        "accessory": source_for("accessory", accessory_saved),
+    })
+    if wardrobe_only:
+        saved_status = {
+            "top": top_saved,
+            "bottom": bottom_saved,
+            "shoes": shoes_saved,
+            "accessory": accessory_saved,
+            "eyewear": eyewear_saved,
+            "perfume": perfume_saved
+        }
+        missing_items = [
+            field for field in ("top", "bottom", "shoes", "accessory")
+            if not saved_status[field]
+        ]
+        for field, is_saved in saved_status.items():
+            if not is_saved:
+                outfit[field] = ""
+                outfit["item_sources"][field] = "missing"
+        if missing_items:
+            outfit["missing_wardrobe_items"] = missing_items
 
     if audience == "children" and weather == "cold":
         outfit["weather_tip"] = "बच्चे के लिए आरामदायक गर्म परतें साथ रखें।"
@@ -1600,6 +2190,7 @@ def make_recommendation(
     else:
         outfit["weather_tip"] = "गर्मी में हल्के और आरामदायक कपड़े चुनें।"
 
+    outfit["color_tip"] = outfit_color_tip(outfit, party_type)
     return add_ethnic_design(outfit, style, audience, outfit_type)
 
 
@@ -2014,7 +2605,28 @@ def get_event_route():
 @app.get("/api/catalog")
 @login_required
 def get_builtin_catalog():
-    return jsonify({"items": BUILTIN_CATALOG})
+    return jsonify({
+        "items": [
+            {
+                **item,
+                "preview_url": url_for(
+                    "get_builtin_catalog_preview", item_index=index
+                )
+            }
+            for index, item in enumerate(BUILTIN_CATALOG)
+        ]
+    })
+
+
+@app.get("/api/catalog/<int:item_index>/preview")
+@login_required
+def get_builtin_catalog_preview(item_index):
+    if not 0 <= item_index < len(BUILTIN_CATALOG):
+        return jsonify({"error": "Catalog item नहीं मिला।"}), 404
+    response = Response(catalog_preview_svg(item_index), mimetype="image/svg+xml")
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @app.post("/api/wardrobe/sample")
@@ -2022,34 +2634,47 @@ def get_builtin_catalog():
 def add_sample_wardrobe():
     user_id = session["user_id"]
     added = 0
+    refreshed = 0
     with connect_db() as connection:
-        for item in BUILTIN_CATALOG:
+        for item_index, item in enumerate(BUILTIN_CATALOG):
             exists = connection.execute(
-                """SELECT 1 FROM wardrobe_items
+                """SELECT id, image_data IS NOT NULL AS has_image
+                   FROM wardrobe_items
                    WHERE user_id = ? AND name = ? AND category = ?
                      AND audience = 'all'
                    LIMIT 1""",
                 (user_id, item["name"], item["category"])
             ).fetchone()
             if exists:
+                if not exists["has_image"]:
+                    connection.execute(
+                        """UPDATE wardrobe_items
+                           SET image_data = ?, image_mime = ?
+                           WHERE id = ?""",
+                        (catalog_preview_svg(item_index), "image/svg+xml", exists["id"])
+                    )
+                    refreshed += 1
                 continue
             connection.execute(
                 """INSERT INTO wardrobe_items
-                   (name, category, created_at, user_id, audience)
-                   VALUES (?, ?, ?, ?, 'all')""",
+                   (name, category, created_at, user_id, audience, image_data, image_mime)
+                   VALUES (?, ?, ?, ?, 'all', ?, ?)""",
                 (
                     item["name"],
                     item["category"],
                     datetime.now().isoformat(timespec="seconds"),
-                    user_id
+                    user_id,
+                    catalog_preview_svg(item_index),
+                    "image/svg+xml"
                 )
             )
             added += 1
     return jsonify({
         "added": added,
+        "refreshed": refreshed,
         "message": (
-            f"{added} sample items आपकी अलमारी में जोड़ दिए गए।"
-            if added else
+            f"{added} sample items और {refreshed} catalog photo previews अलमारी में जोड़ दिए गए।"
+            if added or refreshed else
             "Sample catalog पहले से आपकी अलमारी में है।"
         )
     })
@@ -2166,6 +2791,7 @@ def plan_party_outfit():
     person_name = data.get("person_name", "")
     audience = data.get("audience", "men")
     language = data.get("language", "hi")
+    variation = data.get("variation", 0)
 
     if (
         party not in PARTY_NAMES
@@ -2214,15 +2840,23 @@ def plan_party_outfit():
         return jsonify({
             "error": "पार्टी का नाम, मौसम और लुक के लिए नाम जाँचें।"
         }), 400
+    if (
+        not isinstance(variation, int)
+        or isinstance(variation, bool)
+        or variation not in {0, 1, 2}
+    ):
+        return jsonify({"error": "लुक का विकल्प सही नहीं है।"}), 400
 
     style = {
-        "wedding": "smart",
-        "birthday": "bold",
-        "casual": "casual",
-        "night": "bold"
+        "wedding": ("smart", "bold", "casual"),
+        "birthday": ("bold", "smart", "casual"),
+        "casual": ("casual", "smart", "bold"),
+        "night": ("bold", "smart", "casual")
     }[party]
+    style = style[variation]
     outfit = make_recommendation(
-        session["user_id"], party, weather, style, audience, wardrobe_only=True
+        session["user_id"], party, weather, style, audience,
+        occasion_specific=True, variation=variation
     )
     outfit["weather_outfit"] = weather_outfit_suggestion(
         weather, weather_details or {}, location
@@ -2271,6 +2905,9 @@ def plan_party_outfit():
         "person_name": person_name.strip(),
         "weather_details": weather_details or {"condition": weather}
     })
+    outfit["google_images_url"] = google_images_search_url(
+        party, audience, style, outfit
+    )
     if uses_forecast:
         outfit["event_date"] = event_date
     return jsonify({
@@ -2283,6 +2920,7 @@ def plan_party_outfit():
             "person_name": person_name.strip(),
             "bottom_preference": "trousers",
             "outfit_type": "any",
+            "variation": variation,
             "location": location.strip() if uses_forecast else "",
             "event_date": event_date if uses_forecast else None
         }
@@ -2330,7 +2968,7 @@ def get_manual_event_route():
 def get_wardrobe():
     with connect_db() as connection:
         rows = connection.execute(
-            """SELECT id, name, category, audience, weather,
+            """SELECT id, name, category, audience, party_tag,
                       image_data IS NOT NULL AS has_image
                FROM wardrobe_items
                WHERE user_id = ?
@@ -2366,6 +3004,107 @@ def get_wardrobe_image(item_id):
     return response
 
 
+def identify_wardrobe_photo(image_data, language, category_hint=""):
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise LookupError("GROQ_API_KEY सेट नहीं है।")
+
+    categories = sorted(CATEGORIES)
+    language_name = "Hindi" if language == "hi" else "English"
+    category_context = (
+        f"The user selected {category_hint!r} as a hint. Inspect the photo and choose the best matching category."
+        if category_hint in CATEGORIES else
+        "Inspect the photo and choose the best matching category."
+    )
+    prompt = f"""
+You identify and name the main clothing or fashion item in a personal wardrobe photo.
+Look at the actual image. {category_context}
+Return one short, specific item name in {language_name}, plus exactly one category from this list: {', '.join(categories)}.
+Recognition rules: eyeglasses, prescription glasses, frames, and sunglasses must use category "eyewear" and their name must say glasses/chashma or sunglasses. Wristwatches must use category "accessory" and their name must say watch/ghadi. Belts must use category "accessory" and their name must say belt. Shoes, sneakers, boots, sandals, heels, loafers, and slippers must use category "shoes"; name the visible footwear type and its clearly visible color. Bags and other accessories must also be named by their actual item type; never use a vague name like "accessory" or "item".
+For example, in Hindi use names like "काला फ्रेम वाला चश्मा", "काली कलाई घड़ी", "भूरी बेल्ट", and "सफेद स्नीकर्स". In English use names like "Black-frame glasses", "Black wristwatch", "Brown belt", and "White sneakers".
+Mention only the item type and traits clearly visible, such as color or pattern. Never guess brand, fabric, material, size, gender, or weather suitability.
+If there is no clear clothing, footwear, eyewear, accessory, or perfume item, set is_fashion_item to false.
+Return only a JSON object with keys is_fashion_item (boolean), name (string), and category (string).
+""".strip()
+    image_url = "data:image/jpeg;base64," + base64.b64encode(image_data).decode("ascii")
+    try:
+        response = OpenAI(
+            api_key=api_key,
+            base_url="https://api.groq.com/openai/v1"
+        ).chat.completions.create(
+            model="qwen/qwen3.8-27b",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
+            }],
+            response_format={"type": "json_object"},
+            temperature=1,
+            max_completion_tokens=512
+        )
+        if not response.choices:
+            raise ValueError("The vision model returned no result")
+        result = json.loads(response.choices[0].message.content or "{}")
+        if not isinstance(result, dict):
+            raise ValueError("Invalid wardrobe recognition response")
+        name = result.get("name")
+        category = result.get("category")
+        if isinstance(category, str):
+            category_key = re.sub(r"[\s-]+", "_", category.strip().casefold())
+            category_aliases = {
+                "shirt": "top", "t_shirt": "top", "tshirt": "top", "blouse": "top",
+                "pants": "bottom", "trousers": "bottom", "jeans": "bottom",
+                "shoe": "shoes", "footwear": "shoes", "sneaker": "shoes",
+                "sneakers": "shoes", "boot": "shoes", "boots": "shoes",
+                "sandal": "shoes", "sandals": "shoes", "heels": "shoes",
+                "loafers": "shoes", "slippers": "shoes",
+                "glasses": "eyewear", "spectacles": "eyewear", "sunglasses": "eyewear",
+                "eyeglasses": "eyewear", "watch": "accessory", "wristwatch": "accessory",
+                "wrist_watch": "accessory", "belt": "accessory", "bag": "accessory",
+                "fragrance": "perfume", "scent": "perfume",
+                "शर्ट": "top", "टॉप": "top", "टी_शर्ट": "top", "ब्लाउज": "top",
+                "पैंट": "bottom", "जींस": "bottom", "जूते": "shoes", "जूता": "shoes",
+                "जूती": "shoes", "सैंडल": "shoes", "चप्पल": "shoes", "बूट": "shoes",
+                "चश्मा": "eyewear", "ऐनक": "eyewear", "धूप_का_चश्मा": "eyewear",
+                "घड़ी": "accessory", "कलाई_घड़ी": "accessory",
+                "बेल्ट": "accessory", "बैग": "accessory", "परफ्यूम": "perfume",
+                "इत्र": "perfume", "साड़ी": "saree", "सलवार": "salwar",
+                "लहंगा": "lehenga", "कुर्ती": "kurti"
+            }
+            category = category_aliases.get(category_key, category_key)
+        if (
+            not isinstance(name, str)
+            or not name.strip()
+            or len(name.strip()) > 60
+            or category not in CATEGORIES
+        ):
+            raise ValueError("The image did not return a valid wardrobe item")
+        return {"name": name.strip(), "category": category}
+    except OpenAIError as error:
+        status = getattr(error, "status_code", None)
+        details = str(error).replace(api_key, "[REDACTED]")[:500]
+        app.logger.warning(
+            "Wardrobe photo API failed: status=%s type=%s detail=%s",
+            status, type(error).__name__, details
+        )
+        if status in {401, 403}:
+            message = "Groq ने API key या मॉडल access अस्वीकार किया। backend/.env में GROQ_API_KEY जाँचें।"
+        elif status == 429:
+            message = "Groq की rate limit या usage limit पूरी है। थोड़ी देर बाद फिर कोशिश करें।"
+        elif status == 400:
+            message = "Groq ने फोटो request अस्वीकार की। Flask terminal में कारण देखें।"
+        else:
+            message = "Groq से फोटो पहचान सेवा अभी उपलब्ध नहीं है। Flask terminal देखें और फिर कोशिश करें।"
+        raise RuntimeError(message) from error
+    except (json.JSONDecodeError, IndexError, TypeError, ValueError) as error:
+        app.logger.warning("Wardrobe photo response was invalid (%s)", type(error).__name__)
+        raise RuntimeError(
+            "फोटो से कपड़े का नाम और प्रकार नहीं पहचान पाए। साफ़ फोटो चुनें या AI पहचान बंद करके जोड़ें।"
+        ) from error
+
+
 @app.post("/api/wardrobe")
 @login_required
 def add_wardrobe_item():
@@ -2378,6 +3117,9 @@ def add_wardrobe_item():
     category = data.get("category") or infer_wardrobe_category(name)
     audience = data.get("audience", "adult")
     weather = data.get("weather", "any")
+    party_tag = data.get("party_tag", "any")
+    auto_identify = str(data.get("auto_identify", "false")).lower() in {"1", "true", "yes"}
+    language = data.get("language", "hi")
     image = request.files.get("image")
     image_data = None
     image_mime = None
@@ -2390,6 +3132,23 @@ def add_wardrobe_item():
         except ValueError as error:
             return jsonify({"error": str(error)}), 400
         image_mime = "image/jpeg"
+
+    if auto_identify:
+        if not image_data:
+            return jsonify({"error": "AI पहचान के लिए फोटो चुनें।"}), 400
+        if language not in {"hi", "en"}:
+            language = "hi"
+        try:
+            identified = identify_wardrobe_photo(
+                image_data, language, category_hint=category
+            )
+        except LookupError as error:
+            return jsonify({"error": str(error)}), 503
+        except RuntimeError as error:
+            return jsonify({"error": str(error)}), 502
+        if not name:
+            name = identified["name"]
+        category = identified["category"]
 
     if not name or len(name) > 60:
         return jsonify({
@@ -2405,12 +3164,15 @@ def add_wardrobe_item():
     if weather not in WARDROBE_WEATHER:
         return jsonify({"error": "कपड़े के लिए सही मौसम चुनें।"}), 400
 
+    if not isinstance(party_tag, str) or party_tag not in WARDROBE_PARTY_TAGS:
+        return jsonify({"error": "पार्टी के लिए सही tag चुनें।"}), 400
+
     with connect_db() as connection:
         cursor = connection.execute(
             """INSERT INTO wardrobe_items
-               (name, category, created_at, user_id, audience, weather,
+               (name, category, created_at, user_id, audience, weather, party_tag,
                 image_data, image_mime)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 name,
                 category,
@@ -2418,6 +3180,7 @@ def add_wardrobe_item():
                 session["user_id"],
                 audience,
                 weather,
+                party_tag,
                 image_data,
                 image_mime
             )
@@ -2427,6 +3190,58 @@ def add_wardrobe_item():
         "id": cursor.lastrowid,
         "message": "कपड़ा अलमारी में जोड़ दिया गया।"
     }), 201
+
+
+@app.patch("/api/wardrobe/<int:item_id>")
+@login_required
+def rename_wardrobe_item(item_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "कपड़े की जानकारी सही नहीं है।"}), 400
+
+    name = data.get("name")
+    party_tag = data.get("party_tag")
+    if name is None and party_tag is None:
+        return jsonify({"error": "कपड़े का नाम या पार्टी tag बदलें।"}), 400
+    if name is not None:
+        if not isinstance(name, str):
+            return jsonify({"error": "नया नाम लिखें।"}), 400
+        name = name.strip()
+        if not name or len(name) > 60:
+            return jsonify({
+                "error": "नाम खाली नहीं हो सकता और 60 अक्षरों तक होना चाहिए।"
+            }), 400
+    if party_tag is not None and (
+        not isinstance(party_tag, str) or party_tag not in WARDROBE_PARTY_TAGS
+    ):
+        return jsonify({"error": "पार्टी के लिए सही tag चुनें।"}), 400
+
+    updates = []
+    values = []
+    if name is not None:
+        updates.append("name = ?")
+        values.append(name)
+    if party_tag is not None:
+        updates.append("party_tag = ?")
+        values.append(party_tag)
+
+    with connect_db() as connection:
+        cursor = connection.execute(
+            f"UPDATE wardrobe_items SET {', '.join(updates)} WHERE id = ? AND user_id = ?",
+            (*values, item_id, session["user_id"])
+        )
+
+    if cursor.rowcount == 0:
+        return jsonify({"error": "यह कपड़ा नहीं मिला।"}), 404
+
+    message = (
+        "कपड़े की जानकारी अपडेट कर दी गई।"
+        if name is not None and party_tag is not None
+        else "कपड़े का पार्टी tag बदल दिया गया।"
+        if party_tag is not None
+        else "कपड़े का नाम बदल दिया गया।"
+    )
+    return jsonify({"message": message, "name": name, "party_tag": party_tag})
 
 
 @app.delete("/api/wardrobe/<int:item_id>")
@@ -2494,7 +3309,7 @@ def save_outfit():
             or len(supplied_outfit["weather_tip"]) > 300
             or any(
                 value is not None and (
-                    not isinstance(value, str) or not value.strip() or len(value) > 300
+                    not isinstance(value, str) or len(value) > 300
                 )
                 for field in ("top", "bottom", "shoes", "accessory")
                 for value in [supplied_outfit.get(field)]

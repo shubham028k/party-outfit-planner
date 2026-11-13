@@ -10,7 +10,7 @@ if not exist "%PYTHON%" (
     if errorlevel 1 goto python_error
 )
 
-"%PYTHON%" -c "import flask, openai, PIL, dotenv" >nul 2>nul
+"%PYTHON%" -c "import flask, openai, PIL, dotenv, dateutil" >nul 2>nul
 if errorlevel 1 (
     echo Installing the app requirements...
     "%PYTHON%" -m pip install -r "%~dp0backend\requirements.txt"

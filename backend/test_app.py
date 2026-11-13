@@ -6,6 +6,7 @@ from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 
 import app as outfit_app
@@ -112,6 +113,7 @@ class OutfitPlannerTests(unittest.TestCase):
                     "name": item[0],
                     "category": item[1],
                     "audience": item[2],
+                    "party_tag": "wedding",
                     "size": "M" if item[1] in {"top", "bottom"} else "any",
                     "image": (BytesIO(image_data), f"{item[1]}.png")
                 },
@@ -159,6 +161,18 @@ class OutfitPlannerTests(unittest.TestCase):
             {"top", "bottom", "shoes"},
             data["outfit"]
         )
+        wardrobe_by_id = {
+            item["id"]: item
+            for item in self.client.get("/api/wardrobe").get_json()["items"]
+        }
+        for field, expected_category in (
+            ("top", "top"), ("bottom", "bottom"), ("shoes", "shoes")
+        ):
+            image_path = urlsplit(data["outfit"]["item_images"][field]).path
+            item_id = int(image_path.rsplit("/", 2)[-2])
+            matched_item = wardrobe_by_id[item_id]
+            self.assertEqual(matched_item["category"], expected_category)
+            self.assertIn(matched_item["name"], data["outfit"][field])
         self.assertTrue(
             data["outfit"]["item_images"]["top"].startswith("/api/wardrobe/")
         )
@@ -174,6 +188,28 @@ class OutfitPlannerTests(unittest.TestCase):
             stored["weather_outfit"], data["outfit"]["weather_outfit"]
         )
 
+    def test_catalog_previews_and_sample_wardrobe_include_local_images(self):
+        self.register()
+        catalog = self.client.get("/api/catalog")
+        self.assertEqual(catalog.status_code, 200)
+        items = catalog.get_json()["items"]
+        self.assertTrue(items)
+        self.assertTrue(items[0]["preview_url"].startswith("/api/catalog/"))
+
+        preview = self.client.get(items[0]["preview_url"])
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.mimetype, "image/svg+xml")
+
+        added = self.client.post("/api/wardrobe/sample")
+        self.assertEqual(added.status_code, 200)
+        wardrobe = self.client.get("/api/wardrobe").get_json()["items"]
+        self.assertEqual(len(wardrobe), len(items))
+        self.assertTrue(all(item.get("image_url") for item in wardrobe))
+
+        stored_photo = self.client.get(wardrobe[0]["image_url"])
+        self.assertEqual(stored_photo.status_code, 200)
+        self.assertEqual(stored_photo.mimetype, "image/svg+xml")
+
     def test_party_plan_uses_forecast_condition_to_choose_my_closet_items(self):
         self.register()
         for name, category, weather in (
@@ -187,6 +223,7 @@ class OutfitPlannerTests(unittest.TestCase):
                     "category": category,
                     "audience": "men",
                     "weather": weather,
+                    "party_tag": "wedding",
                 },
             )
             self.assertEqual(response.status_code, 201)
@@ -227,6 +264,34 @@ class OutfitPlannerTests(unittest.TestCase):
         self.assertIn("जैकेट या कोट", data["outfit"]["weather_tip"])
         self.assertIn("छाता", data["outfit"]["weather_tip"])
 
+    def test_warm_weather_does_not_select_a_saved_winter_coat(self):
+        self.register()
+        for name in ("Black patterned long coat", "Blue birthday linen shirt"):
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": "top",
+                    "audience": "men",
+                    "weather": "any",
+                    "party_tag": "birthday",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        response = self.client.post(
+            "/api/plan",
+            json={
+                "party_name": "birthday party",
+                "audience": "men",
+                "weather": "warm",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        outfit = response.get_json()["outfit"]
+        self.assertEqual(outfit["top"], "Blue birthday linen shirt")
+        self.assertNotIn("coat", outfit["top"].casefold())
+
     def test_party_plan_gives_light_clothing_advice_for_hot_destination(self):
         self.register()
         event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
@@ -259,32 +324,41 @@ class OutfitPlannerTests(unittest.TestCase):
 
     def test_weather_matched_outfit_changes_even_when_closet_items_are_all_weather(self):
         self.register()
-        self.client.post(
-            "/api/wardrobe",
-            json={
-                "name": "My everyday shirt",
-                "category": "top",
-                "audience": "men",
-                "weather": "any",
-            },
-        )
+        for name, category in (
+            ("Birthday graphic everyday shirt", "top"),
+            ("Birthday black everyday jeans", "bottom"),
+            ("Birthday party everyday sneakers", "shoes"),
+            ("Colorful birthday everyday watch", "accessory"),
+        ):
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "men",
+                    "weather": "any",
+                    "party_tag": "birthday",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
         event_date = (datetime.now().date() + timedelta(days=1)).isoformat()
-        forecasts = (
-            {
-                "condition": "warm",
-                "temperature_min": 28,
-                "temperature_max": 40,
-                "precipitation_probability": 0,
-            },
-            {
-                "condition": "cold",
-                "temperature_min": 2,
-                "temperature_max": 8,
-                "precipitation_probability": 20,
-            },
+        rainy_date = (datetime.now().date() + timedelta(days=2)).isoformat()
+        city_dates_and_forecasts = (
+            ("Jaipur", event_date, {
+                "condition": "warm", "temperature_min": 28,
+                "temperature_max": 40, "precipitation_probability": 0,
+            }),
+            ("Srinagar", event_date, {
+                "condition": "cold", "temperature_min": 2,
+                "temperature_max": 8, "precipitation_probability": 20,
+            }),
+            ("Mumbai", rainy_date, {
+                "condition": "rainy", "temperature_min": 20,
+                "temperature_max": 27, "precipitation_probability": 90,
+            }),
         )
         responses = []
-        for location, forecast in zip(("Rajasthan", "Kashmir"), forecasts):
+        for location, requested_date, forecast in city_dates_and_forecasts:
             with patch.object(
                 outfit_app, "weather_for_event", return_value=forecast
             ):
@@ -292,7 +366,7 @@ class OutfitPlannerTests(unittest.TestCase):
                     "/api/plan",
                     json={
                         "party_name": "birthday",
-                        "event_date": event_date,
+                        "event_date": requested_date,
                         "location": location,
                         "audience": "men",
                     },
@@ -300,10 +374,561 @@ class OutfitPlannerTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             responses.append(response.get_json()["outfit"])
 
-        self.assertEqual(responses[0]["top"], responses[1]["top"])
-        self.assertNotEqual(
-            responses[0]["weather_outfit"], responses[1]["weather_outfit"]
+        for field in ("top", "bottom", "shoes", "accessory"):
+            self.assertEqual(len({outfit[field] for outfit in responses}), 3)
+            self.assertEqual(responses[0]["item_sources"][field], "saved")
+            self.assertTrue(all(
+                outfit["item_sources"][field] == "saved_weather_adjusted"
+                for outfit in responses[1:]
+            ))
+        self.assertEqual(responses[1]["weather_details"]["condition"], "cold")
+        self.assertEqual(responses[2]["weather_details"]["condition"], "rainy")
+        self.assertIn("Srinagar", responses[1]["weather_outfit"])
+        self.assertIn("Mumbai", responses[2]["weather_outfit"])
+        self.assertIn("थर्मल इनर", responses[1]["bottom"])
+        self.assertIn("गर्म मोज़े", responses[1]["shoes"])
+        self.assertIn("छाता", responses[2]["accessory"])
+        self.assertEqual(responses[2]["event_date"], rainy_date)
+
+    def test_party_and_weather_plan_pick_matching_saved_top_and_shoes(self):
+        self.register()
+        party_items = {
+            "wedding": ("Formal wedding blazer", "Formal brown loafers"),
+            "birthday": ("Bright colorful graphic birthday top", "Bright birthday sneakers"),
+            "casual": ("Casual denim t-shirt", "Casual white sneakers"),
+            "night": ("Black satin night shirt", "Black night boots"),
+        }
+        party_searches = {
+            "wedding": "wedding party",
+            "birthday": "birthday party",
+            "casual": "casual party",
+            "night": "night party",
+        }
+        for weather in ("warm", "cold", "rainy"):
+            for party, (top_name, shoe_name) in party_items.items():
+                for name, category in ((top_name, "top"), (shoe_name, "shoes")):
+                    response = self.client.post(
+                        "/api/wardrobe",
+                        json={
+                            "name": f"{weather.title()} {name}",
+                            "category": category,
+                            "audience": "men",
+                            "weather": weather,
+                        },
+                    )
+                    self.assertEqual(response.status_code, 201)
+
+        # Strong party matches marked for all weather must not override an
+        # item saved for the actual forecast weather.
+        for name, category in (
+            ("Bright colorful graphic birthday party jacket", "top"),
+            ("Bright birthday party sneakers", "shoes"),
+        ):
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "men",
+                    "weather": "any",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        for weather in ("warm", "cold", "rainy"):
+            for party, (top_name, shoe_name) in party_items.items():
+                response = self.client.post(
+                    "/api/plan",
+                    json={
+                        "party_name": party_searches[party],
+                        "audience": "men",
+                        "weather": weather,
+                    },
+                )
+                self.assertEqual(response.status_code, 200)
+                data = response.get_json()
+                self.assertEqual(data["selection"]["weather"], weather)
+                self.assertEqual(data["selection"]["party_type"], party)
+                self.assertTrue(data["outfit"]["top"].startswith(
+                    f"{weather.title()} {top_name}"
+                ))
+                self.assertTrue(data["outfit"]["shoes"].startswith(
+                    f"{weather.title()} {shoe_name}"
+                ))
+                if weather == "cold":
+                    self.assertIn("गर्म जैकेट/कोट", data["outfit"]["top"])
+                    self.assertIn("गर्म मोज़े", data["outfit"]["shoes"])
+                elif weather == "rainy":
+                    self.assertIn("वाटरप्रूफ", data["outfit"]["top"])
+                    self.assertIn("ग्रिप", data["outfit"]["shoes"])
+
+    def test_party_and_weather_suggestions_work_without_wardrobe_items(self):
+        self.register()
+        party_searches = {
+            "wedding": "wedding party",
+            "birthday": "birthday party",
+            "casual": "casual party",
+            "night": "night party",
+        }
+        for weather in ("warm", "cold", "rainy"):
+            outfits_by_party = {}
+            for party_name in party_searches.values():
+                response = self.client.post(
+                    "/api/plan",
+                    json={
+                        "party_name": party_name,
+                        "audience": "men",
+                        "weather": weather,
+                    },
+                )
+                self.assertEqual(response.status_code, 200)
+                outfit = response.get_json()["outfit"]
+                outfits_by_party[outfit["party_name"]] = outfit
+                for field in ("top", "bottom", "shoes", "accessory"):
+                    self.assertTrue(outfit[field])
+                    self.assertEqual(outfit["item_sources"][field], "suggested")
+                self.assertTrue(outfit["color_tip"]["hi"])
+                if weather == "cold":
+                    self.assertIn("थर्मल", outfit["weather_outfit"])
+                if weather == "rainy":
+                    self.assertIn("वाटरप्रूफ", outfit["weather_outfit"])
+
+            wedding = outfits_by_party["शादी की पार्टी"]
+            birthday = outfits_by_party["बर्थडे पार्टी"]
+            night = outfits_by_party["नाइट पार्टी"]
+            self.assertNotEqual(wedding["top"], birthday["top"])
+            self.assertNotEqual(birthday["top"], night["top"])
+            self.assertNotEqual(wedding["shoes"], birthday["shoes"])
+            self.assertNotEqual(birthday["shoes"], night["shoes"])
+
+    def test_party_plan_returns_three_distinct_outfit_combinations(self):
+        self.register()
+        party_names = {
+            "wedding": "wedding party",
+            "birthday": "birthday party",
+            "night": "night party",
+        }
+        for party, party_name in party_names.items():
+            for audience in ("men", "women"):
+                combinations = []
+                styles = []
+                for variation in range(3):
+                    response = self.client.post(
+                        "/api/plan",
+                        json={
+                            "party_name": party_name,
+                            "audience": audience,
+                            "weather": "warm",
+                            "variation": variation,
+                        },
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    payload = response.get_json()
+                    outfit = payload["outfit"]
+                    combinations.append(tuple(
+                        outfit[field]
+                        for field in ("top", "bottom", "shoes", "accessory")
+                    ))
+                    styles.append(payload["selection"]["style"])
+
+                self.assertEqual(len(set(styles)), 3, f"{party} styles for {audience}")
+                self.assertEqual(
+                    len(set(combinations)), 3,
+                    f"{party} outfit combinations for {audience}"
+                )
+
+        invalid = self.client.post(
+            "/api/plan",
+            json={"party_name": "birthday", "audience": "men", "weather": "warm", "variation": 3},
         )
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_next_party_outfit_rotates_through_matching_saved_items(self):
+        self.register()
+        items = (
+            ("Ivory wedding kurta", "top"),
+            ("Navy formal wedding blazer", "top"),
+            ("Cream formal wedding trousers", "bottom"),
+            ("Black formal wedding trousers", "bottom"),
+            ("Brown formal wedding loafers", "shoes"),
+            ("Black formal wedding loafers", "shoes"),
+            ("Classic wedding watch", "accessory"),
+            ("Silver wedding jewelry", "accessory"),
+        )
+        for name, category in items:
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "men",
+                    "weather": "any",
+                    "party_tag": "wedding",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        looks = []
+        for variation in (0, 1):
+            response = self.client.post(
+                "/api/plan",
+                json={
+                    "party_name": "wedding",
+                    "audience": "men",
+                    "weather": "warm",
+                    "variation": variation,
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            outfit = response.get_json()["outfit"]
+            looks.append(tuple(outfit[field] for field in (
+                "top", "bottom", "shoes", "accessory"
+            )))
+
+        self.assertNotEqual(looks[0], looks[1])
+
+    def test_generic_closet_items_do_not_repeat_for_every_party(self):
+        self.register()
+        for name, category in (
+            ("Navy shirt", "top"),
+            ("Beige trousers", "bottom"),
+            ("Brown loafers", "shoes"),
+            ("Classic watch", "accessory"),
+        ):
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "men",
+                    "weather": "any",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        looks = {}
+        for party in ("wedding", "birthday", "night"):
+            response = self.client.post(
+                "/api/plan",
+                json={"party_name": party, "audience": "men", "weather": "warm"},
+            )
+            self.assertEqual(response.status_code, 200)
+            looks[party] = response.get_json()["outfit"]
+
+        for field in ("top", "shoes", "accessory"):
+            self.assertEqual(
+                len({look[field] for look in looks.values()}), 3,
+                f"generic closet items should not make every {field} result identical"
+            )
+        # Plain bottoms are neutral, so a saved pair of trousers is used for
+        # every party that does not exclude it.
+        for look in looks.values():
+            self.assertEqual(look["bottom"], "Beige trousers")
+            self.assertEqual(look["item_sources"]["bottom"], "saved")
+        self.assertEqual(looks["birthday"]["top"], "मरून टेक्सचर्ड शर्ट")
+        self.assertEqual(looks["night"]["shoes"], "ब्लैक बूट्स")
+
+    def test_plain_saved_bottoms_are_used_but_wedding_still_skips_jeans(self):
+        self.register()
+        for name, category in (
+            ("Black pants", "bottom"),
+            ("Blue jeans", "bottom"),
+        ):
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "men",
+                    "weather": "any",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        for party in ("birthday", "night", "wedding"):
+            response = self.client.post(
+                "/api/plan",
+                json={"party_name": party, "audience": "men", "weather": "warm"},
+            )
+            self.assertEqual(response.status_code, 200)
+            outfit = response.get_json()["outfit"]
+            self.assertEqual(outfit["item_sources"]["bottom"], "saved", party)
+            if party == "wedding":
+                self.assertEqual(outfit["bottom"], "Black pants")
+
+    def test_party_city_and_event_date_change_clothes_shoes_and_accessories(self):
+        self.register()
+        first_date = (datetime.now().date() + timedelta(days=1)).isoformat()
+        second_date = (datetime.now().date() + timedelta(days=2)).isoformat()
+        forecasts = {
+            "warm": {
+                "condition": "warm", "temperature_min": 28,
+                "temperature_max": 39, "precipitation_probability": 0
+            },
+            "cold": {
+                "condition": "cold", "temperature_min": 4,
+                "temperature_max": 12, "precipitation_probability": 10
+            },
+            "rainy": {
+                "condition": "rainy", "temperature_min": 20,
+                "temperature_max": 27, "precipitation_probability": 90
+            },
+        }
+
+        def plan(party, city, event_date, forecast):
+            with patch.object(
+                outfit_app, "weather_for_event", return_value=forecast
+            ) as get_weather:
+                response = self.client.post(
+                    "/api/plan",
+                    json={
+                        "party_name": party,
+                        "audience": "men",
+                        "location": city,
+                        "event_date": event_date,
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            get_weather.assert_called_once_with(city, event_date)
+            return response.get_json()["outfit"]
+
+        warm_party_looks = {
+            party: plan(party, "Jaipur", first_date, forecasts["warm"])
+            for party in ("wedding", "birthday", "night")
+        }
+        for field in ("top", "bottom", "shoes", "accessory"):
+            self.assertEqual(
+                len({look[field] for look in warm_party_looks.values()}), 3,
+                f"{field} should change between wedding, birthday, and night party"
+            )
+
+        warm_birthday = warm_party_looks["birthday"]
+        cold_birthday = plan("birthday", "Srinagar", first_date, forecasts["cold"])
+        rainy_birthday = plan("birthday", "Mumbai", second_date, forecasts["rainy"])
+        for weather_look in (cold_birthday, rainy_birthday):
+            self.assertNotEqual(weather_look["top"], warm_birthday["top"])
+            self.assertNotEqual(weather_look["bottom"], warm_birthday["bottom"])
+            self.assertNotEqual(weather_look["shoes"], warm_birthday["shoes"])
+            self.assertNotEqual(weather_look["accessory"], warm_birthday["accessory"])
+        self.assertIn("Srinagar", cold_birthday["weather_outfit"])
+        self.assertIn("Mumbai", rainy_birthday["weather_outfit"])
+        self.assertEqual(cold_birthday["event_date"], first_date)
+        self.assertEqual(rainy_birthday["event_date"], second_date)
+
+    def test_wedding_avoids_saved_casual_clothes_but_casual_party_uses_them(self):
+        self.register()
+        for name, category in (
+            ("Black graphic print t-shirt", "top"),
+            ("Blue jeans", "bottom"),
+        ):
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "men",
+                    "weather": "any",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        wedding = self.client.post(
+            "/api/plan",
+            json={"party_name": "wedding", "audience": "men", "weather": "warm"},
+        )
+        self.assertEqual(wedding.status_code, 200)
+        wedding_outfit = wedding.get_json()["outfit"]
+        self.assertNotEqual(wedding_outfit["top"], "Black graphic print t-shirt")
+        self.assertNotEqual(wedding_outfit["bottom"], "Blue jeans")
+        self.assertEqual(wedding_outfit["item_sources"]["top"], "suggested")
+        self.assertTrue(wedding_outfit["top"])
+
+        casual = self.client.post(
+            "/api/plan",
+            json={"party_name": "casual", "audience": "men", "weather": "warm"},
+        )
+        self.assertEqual(casual.status_code, 200)
+        casual_outfit = casual.get_json()["outfit"]
+        self.assertEqual(casual_outfit["top"], "Black graphic print t-shirt")
+        self.assertEqual(casual_outfit["bottom"], "Blue jeans")
+        self.assertEqual(casual_outfit["item_sources"]["top"], "saved")
+
+    def test_saved_top_and_bottom_are_selected_as_a_coordinated_pair(self):
+        self.register()
+        for name, category in (
+            ("Pink patterned long kurta", "top"),
+            ("Grey side striped pants", "bottom"),
+            ("Cream straight trousers", "bottom"),
+        ):
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "men",
+                    "weather": "any",
+                    "party_tag": "wedding",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        response = self.client.post(
+            "/api/plan",
+            json={"party_name": "wedding", "audience": "men", "weather": "warm"},
+        )
+        self.assertEqual(response.status_code, 200)
+        outfit = response.get_json()["outfit"]
+        self.assertEqual(outfit["top"], "Pink patterned long kurta")
+        self.assertEqual(outfit["bottom"], "Cream straight trousers")
+        self.assertEqual(outfit["item_sources"]["bottom"], "saved")
+
+        other_client = outfit_app.app.test_client()
+        self.register(other_client, username="kurta_user")
+        for name, category in (
+            ("Pink patterned long kurta", "top"),
+            ("Grey side striped pants", "bottom"),
+        ):
+            response = other_client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "men",
+                    "weather": "any",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+        fallback = other_client.post(
+            "/api/plan",
+            json={"party_name": "wedding", "audience": "men", "weather": "warm"},
+        )
+        self.assertEqual(fallback.status_code, 200)
+        fallback_outfit = fallback.get_json()["outfit"]
+        self.assertTrue(fallback_outfit["bottom"])
+        self.assertEqual(fallback_outfit["item_sources"]["bottom"], "suggested")
+
+    def test_party_tags_choose_matching_closet_items_and_suggest_missing_items(self):
+        self.register()
+        items = (
+            ("Pink patterned long kurta", "top", "wedding"),
+            ("Beige Pleated Trousers", "bottom", "wedding"),
+            ("Tan loafers", "shoes", "wedding"),
+            ("Classic watch", "accessory", "wedding"),
+            ("Birthday graphic t-shirt", "top", "birthday"),
+            ("Blue jeans", "bottom", "birthday"),
+        )
+        for name, category, party_tag in items:
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "men",
+                    "party_tag": party_tag,
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        wedding = self.client.post(
+            "/api/plan",
+            json={"party_name": "wedding", "audience": "men", "weather": "warm"},
+        )
+        self.assertEqual(wedding.status_code, 200)
+        wedding_outfit = wedding.get_json()["outfit"]
+        self.assertEqual(wedding_outfit["top"], "Pink patterned long kurta")
+        self.assertEqual(wedding_outfit["bottom"], "Beige Pleated Trousers")
+        self.assertEqual(wedding_outfit["shoes"], "Tan loafers")
+        self.assertEqual(wedding_outfit["accessory"], "Classic watch")
+        self.assertNotIn("missing_wardrobe_items", wedding_outfit)
+        self.assertIn(
+            "गुलाबी + बेज + टैन",
+            wedding_outfit["color_tip"]["hi"],
+        )
+
+        birthday = self.client.post(
+            "/api/plan",
+            json={"party_name": "birthday", "audience": "men", "weather": "warm"},
+        )
+        self.assertEqual(birthday.status_code, 200)
+        birthday_outfit = birthday.get_json()["outfit"]
+        self.assertEqual(birthday_outfit["top"], "Birthday graphic t-shirt")
+        self.assertEqual(birthday_outfit["bottom"], "Blue jeans")
+        self.assertEqual(birthday_outfit["item_sources"]["shoes"], "suggested")
+        self.assertTrue(birthday_outfit["shoes"])
+        self.assertIn("चटख टॉप", birthday_outfit["color_tip"]["hi"])
+
+        wardrobe = self.client.get("/api/wardrobe").get_json()["items"]
+        top = next(item for item in wardrobe if item["name"] == "Birthday graphic t-shirt")
+        update = self.client.patch(
+            f"/api/wardrobe/{top['id']}",
+            json={"name": top["name"], "party_tag": "wedding"},
+        )
+        self.assertEqual(update.status_code, 200)
+        updated_items = self.client.get("/api/wardrobe").get_json()["items"]
+        updated_top = next(item for item in updated_items if item["id"] == top["id"])
+        self.assertEqual(updated_top["party_tag"], "wedding")
+
+    def test_google_images_links_use_distinct_party_and_outfit_queries(self):
+        self.register()
+        expected_terms = {
+            "wedding": "Indian wedding guest outfit",
+            "birthday": "Indian birthday party outfit",
+            "night": "Indian night party outfit",
+        }
+        queries = {}
+
+        for party, expected_term in expected_terms.items():
+            response = self.client.post(
+                "/api/plan",
+                json={"party_name": party, "audience": "men", "weather": "warm"},
+            )
+            self.assertEqual(response.status_code, 200)
+            outfit = response.get_json()["outfit"]
+            parsed_url = urlsplit(outfit["google_images_url"])
+            parameters = parse_qs(parsed_url.query)
+
+            self.assertEqual(parsed_url.scheme, "https")
+            self.assertEqual(parsed_url.netloc, "www.google.com")
+            self.assertEqual(parameters.get("tbm"), ["isch"])
+            query = parameters["q"][0]
+            self.assertIn(expected_term, query)
+            self.assertIn("for men", query)
+            queries[party] = query
+
+        self.assertEqual(len(set(queries.values())), 3)
+
+    def test_womens_wedding_prioritizes_saved_ethnic_wear(self):
+        self.register()
+        items = (
+            ("Blue casual jeans", "bottom", "any"),
+            ("Red wedding saree", "saree", "warm"),
+            ("Matching saree blouse", "top", "warm"),
+        )
+        for name, category, weather in items:
+            response = self.client.post(
+                "/api/wardrobe",
+                json={
+                    "name": name,
+                    "category": category,
+                    "audience": "women",
+                    "weather": weather,
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        response = self.client.post(
+            "/api/plan",
+            json={
+                "party_name": "शादी की पार्टी",
+                "audience": "women",
+                "weather": "warm",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        outfit = response.get_json()["outfit"]
+        self.assertEqual(outfit["top"], "Matching saree blouse")
+        self.assertEqual(outfit["bottom"], "Red wedding saree")
+        self.assertEqual(outfit["item_categories"]["bottom"], "saree")
 
     def test_party_plan_requires_location_and_date_for_weather_forecast(self):
         self.register()
@@ -971,58 +1596,61 @@ END:VCALENDAR
         self.assertEqual(self.client.delete(f"/api/outfits/{outfit_id}").status_code, 200)
         self.assertEqual(self.client.get("/api/outfits").get_json()["outfits"], [])
 
-    def test_photo_analysis_reports_missing_key_without_making_external_call(self):
+    def test_wardrobe_photo_identification_reports_missing_key_without_external_call(self):
         self.register()
-        with patch.dict(os.environ, {"GROQ_API_KEY": ""}):
+        image_buffer = BytesIO()
+        Image.new("RGB", (4, 4), "white").save(image_buffer, format="PNG")
+        image_buffer.seek(0)
+        with (
+            patch.dict(os.environ, {"GROQ_API_KEY": ""}),
+            patch.object(outfit_app, "OpenAI") as openai_client,
+        ):
             response = self.client.post(
-                "/api/analyze-photo",
-                data={"photo_consent": "yes"},
+                "/api/wardrobe",
+                data={
+                    "auto_identify": "true",
+                    "image": (image_buffer, "look.png"),
+                },
+                content_type="multipart/form-data",
             )
         self.assertEqual(response.status_code, 503)
         self.assertIn("GROQ_API_KEY", response.get_json()["error"])
+        openai_client.assert_not_called()
 
-    def test_photo_analysis_includes_ethnic_design_preview_data(self):
+    def test_wardrobe_photo_identification_names_and_categorizes_the_item(self):
         self.register()
         image_buffer = BytesIO()
         Image.new("RGB", (4, 4), "white").save(image_buffer, format="PNG")
         image_buffer.seek(0)
         fake_response = SimpleNamespace(
-            output_text=json.dumps({
-                "top": "साड़ी ब्लाउज़",
-                "bottom": "साड़ी",
-                "shoes": "हील्स",
-                "accessory": "क्लासिक ज्वेलरी",
-                "weather_tip": "हल्की परत रखें।"
-            })
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+                "is_fashion_item": True,
+                "name": "लाल साड़ी",
+                "category": "saree",
+            })))]
         )
 
         with (
             patch.dict(os.environ, {"GROQ_API_KEY": "test-key"}),
             patch.object(outfit_app, "OpenAI") as openai_client,
         ):
-            openai_client.return_value.responses.create.return_value = fake_response
+            openai_client.return_value.chat.completions.create.return_value = (
+                fake_response
+            )
             response = self.client.post(
-                "/api/analyze-photo",
+                "/api/wardrobe",
                 data={
-                    "photo": (image_buffer, "look.png"),
-                    "photo_consent": "yes",
-                    "party_type": "wedding",
-                    "weather": "warm",
-                    "style": "smart",
+                    "auto_identify": "true",
                     "audience": "women",
-                    "outfit_type": "ethnic",
-                    "bottom_preference": "trousers",
-                    "size_preference": "any",
-                    "location": "Jaipur",
+                    "image": (image_buffer, "look.png"),
                 },
                 content_type="multipart/form-data",
             )
 
-        self.assertEqual(response.status_code, 200)
-        outfit = response.get_json()["outfit"]
-        self.assertEqual(outfit["location"], "Jaipur")
-        self.assertEqual(outfit["design_type"], "saree")
-        self.assertIn("ज़री बॉर्डर", outfit["design_details"])
+        self.assertEqual(response.status_code, 201)
+        item = self.client.get("/api/wardrobe").get_json()["items"][0]
+        self.assertEqual(item["name"], "लाल साड़ी")
+        self.assertEqual(item["category"], "saree")
 
     def test_database_path_creates_missing_parent_directory(self):
         database_path = Path(self.database_directory.name) / "nested" / "app.db"
