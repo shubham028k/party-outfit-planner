@@ -225,7 +225,11 @@
           <div class="wardrobe-image-field">
             <label for="wardrobeImage">कपड़े की फोटो (एक से ज़्यादा चुन सकते हैं)</label>
             <input id="wardrobeImage" name="image" type="file" multiple
-                   accept="image/jpeg,image/png,image/webp">
+            <label for="wardrobeCamera" style="display:block; text-align:center; background:#e75480; color:white; padding:12px; border-radius:10px; cursor:pointer; margin-top:10px;">
+  📷 Camera se photo lo
+         </label>
+<input id="wardrobeCamera" type="file" accept="image/*" capture="environment" hidden>
+            accept="image/jpeg,image/png,image/webp">
             <small id="wardrobeImageHint">एक साथ कई फोटो चुनें। AI हर फोटो का नाम और category पहचानेगा; बंद करने पर फ़ाइल का नाम और ऊपर चुनी category इस्तेमाल होगी।</small>
             <label class="wardrobe-ai-toggle" for="wardrobeAiIdentify">
               <input id="wardrobeAiIdentify" type="checkbox" checked>
@@ -293,5 +297,16 @@
   </div>
 
   <script src="{{ url_for('static', filename='script.js') }}?v=20261113-08"></script>
+
+<script>
+  const mainInput = document.getElementById('wardrobeImage');
+  document.getElementById('wardrobeCamera').addEventListener('change', function(){
+    const dt = new DataTransfer();
+    for(let f of mainInput.files) dt.items.add(f);
+    for(let f of this.files) dt.items.add(f);
+    mainInput.files = dt.files;
+    mainInput.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+</script>
 </body>
 </html>
