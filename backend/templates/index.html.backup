@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#17152b">
+  <title>पार्टी आउटफिट प्लानर</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261113-08">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="/">
+        <span class="brand-icon">✳</span>
+        <span>PARTY OUTFIT <span class="brand-accent">PLANNER</span></span>
+      </a>
+      <div class="topbar-actions">
+  <span class="topbar-note"><span class="status-dot"></span> आपका स्टाइल असिस्टेंट</span>
+  <span class="username-badge">{{ session.get("username", "") }}</span>
+  <label class="language-control" for="languageSelect">
+  <span class="visually-hidden">Language / भाषा</span>
+  <select id="languageSelect" aria-label="Language / भाषा">
+    <option value="hi">हिन्दी</option>
+    <option value="en">English</option>
+  </select>
+</label>                                    
+  <form action="{{ url_for('logout') }}" method="post">
+    <button class="logout-button" type="submit">लॉगआउट</button>
+  </form>
+</div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">YOUR PLAN, YOUR STYLE</p>
+          <h1>आपकी अलमारी,<br><span>आपका अगला लुक।</span></h1>
+          <p class="hero-description">
+            अपनी डिजिटल अलमारी में कपड़ों की photos जोड़ें। पार्टी और मौसम चुनें—लुक आपकी अलमारी से बनेगा।
+          </p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="hero-emoji">👗</div>
+          <span class="sparkle sparkle-one">✦</span>
+          <span class="sparkle sparkle-two">✧</span>
+          <span class="hero-tag">LOOK GOOD.<br>FEEL GREAT.</span>
+        </div>
+      </section>
+
+      <section class="planner-grid">
+        <section class="panel form-panel" aria-labelledby="plannerTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">YOUR NEXT EVENT</p>
+              <h2 id="plannerTitle">अपनी पार्टी बताओ</h2>
+            </div>
+            <span class="step-badge">01</span>
+          </div>
+          <form id="outfitForm">
+            <label for="partySearch">पार्टी का नाम खोजें</label>
+            <input id="partySearch" class="planner-input" name="party_name"
+                   list="partySuggestions" maxlength="60" autocomplete="off"
+                   placeholder="जैसे: शादी, जन्मदिन या नाइट पार्टी" required>
+            <datalist id="partySuggestions">
+              <option value="शादी की पार्टी"></option>
+              <option value="बर्थडे पार्टी"></option>
+              <option value="कैज़ुअल पार्टी"></option>
+              <option value="नाइट पार्टी"></option>
+            </datalist>
+
+            <label for="outfitAudience">किसके लिए लुक?</label>
+            <select id="outfitAudience" class="planner-input" name="audience" required>
+              <option value="men">पुरुष</option>
+              <option value="women">महिला</option>
+              <option value="children">बच्चे</option>
+              <option value="senior">बुज़ुर्ग</option>
+            </select>
+
+            <label for="eventDate">कब जाना है?</label>
+            <input id="eventDate" class="planner-input" name="event_date"
+                   type="date" required>
+            <small id="eventDatePreview" class="date-preview" aria-live="polite"></small>
+
+            <label for="eventLocation">कहाँ जाना है?</label>
+            <input id="eventLocation" class="planner-input" name="location"
+                   type="text" maxlength="100" autocomplete="street-address"
+                   placeholder="शहर या राज्य, जैसे जयपुर, राजस्थान या कश्मीर" required>
+            <small class="planner-hint">शहर या राज्य और तारीख भरो—मौसम देखकर उसी के हिसाब से कपड़े सुझेंगे। राज्य का मौसम अनुमानित होगा।</small>
+
+            <p id="plannerHint" class="planner-hint">चुनी तारीख और जगह का मौसम देखकर अलमारी से कपड़े अपने आप चुने जाएँगे।</p>
+            <button class="primary-button" type="submit">
+              <span>मेरी पार्टी का लुक बताओ</span><span aria-hidden="true">↗</span>
+            </button>
+            <p id="errorMessage" class="error-message" role="alert"></p>
+          </form>
+        </section>
+
+        <div class="panel result-panel" id="resultPanel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">MADE FOR YOUR PLAN</p>
+              <h2>तुम्हारा लुक</h2>
+            </div>
+            <span class="step-badge">02</span>
+          </div>
+
+          <div id="resultPlaceholder" class="result-placeholder">
+            <span class="placeholder-icon">✧</span>
+            <p>अपनी पार्टी की जानकारी भरो।<br>तुम्हारा लुक यहाँ दिखाई देगा।</p>
+          </div>
+
+          <div id="outfitResult" class="outfit-result" hidden>
+            <div class="look-label">
+              <span id="partyName"></span>
+              <span id="styleName"></span>
+            </div>
+            <p id="lookWeather" class="look-weather"></p>
+            <section id="weatherOutfitBox" class="weather-outfit" hidden>
+              <h3 id="weatherOutfitTitle">मौसम के हिसाब से पहनें</h3>
+              <p id="weatherOutfit"></p>
+              <div id="weatherOutfitImages" class="weather-outfit-images" hidden></div>
+            </section>
+            <h3 id="wearTitle" class="outfit-group-title">तुम्हारे लिए सुझाया गया लुक</h3>
+            <div class="outfit-items">
+              <div id="outfitTopCard" class="outfit-item"><button id="outfitTopImageLink" class="outfit-visual outfit-image-link" type="button" disabled>👕<img id="outfitTopImage" alt="" hidden></button><div><small class="outfit-category-label">ऊपर</small><strong id="outfitTop"></strong><span id="outfitTopSource" class="outfit-source" hidden></span></div></div>
+              <div id="outfitBottomCard" class="outfit-item"><button id="outfitBottomImageLink" class="outfit-visual outfit-image-link" type="button" disabled>👖<img id="outfitBottomImage" alt="" hidden></button><div><small class="outfit-category-label">नीचे</small><strong id="outfitBottom"></strong><span id="outfitBottomSource" class="outfit-source" hidden></span></div></div>
+              <div id="outfitShoesCard" class="outfit-item"><button id="outfitShoesImageLink" class="outfit-visual outfit-image-link" type="button" disabled>👟<img id="outfitShoesImage" alt="" hidden></button><div><small class="outfit-category-label">जूते</small><strong id="outfitShoes"></strong><span id="outfitShoesSource" class="outfit-source" hidden></span></div></div>
+              <div id="outfitAccessoryCard" class="outfit-item"><button id="outfitAccessoryImageLink" class="outfit-visual outfit-image-link" type="button" disabled>⌚<img id="outfitAccessoryImage" alt="" hidden></button><div><small class="outfit-category-label">एक्सेसरी</small><strong id="outfitAccessory"></strong><span id="outfitAccessorySource" class="outfit-source" hidden></span></div></div>
+            </div>
+            <div id="colorTipBox" class="color-tip" hidden><span>🎨</span><p id="colorTip"></p></div>
+            <p id="partySuitabilityWarning" class="party-suitability-warning" role="status" hidden></p>
+            <a id="googleImagesButton" class="secondary-button google-images-button"
+               href="#" target="_blank" rel="noopener noreferrer" hidden>
+              Google Images पर ऐसे लुक देखें ↗
+            </a>
+            <p id="emptyWardrobeLook" class="empty-history" hidden>
+              इस पार्टी और व्यक्ति के लिए अलमारी में कपड़े नहीं मिले। पहले अपनी अलमारी में कपड़े जोड़ें।
+            </p>
+            <section id="avoidSection" class="avoid-section" aria-labelledby="avoidTitle" hidden>
+              <h3 id="avoidTitle">इनसे बचें</h3>
+              <p id="avoidTip"></p>
+            </section>
+            <section id="designIdea" class="design-idea" aria-labelledby="designIdeaTitle" hidden>
+              <div id="designVisual" class="design-visual"></div>
+              <div class="design-copy">
+                <p class="eyebrow">DESIGN INSPIRATION</p>
+                <h3 id="designIdeaTitle"></h3>
+                <p id="designDetails"></p>
+              </div>
+            </section>
+            <div class="weather-tip"><span>✦</span><p id="weatherTip"></p></div>
+          </div>
+          <dialog id="outfitImageDialog" class="outfit-image-dialog">
+            <button id="closeOutfitImageDialog" class="dialog-close-button" type="button" aria-label="फोटो बंद करें">×</button>
+            <img id="outfitImageDialogPhoto" alt="">
+            <p id="outfitImageDialogName"></p>
+          </dialog>
+          <button id="nextOutfitButton" class="secondary-button next-outfit-button" type="button" hidden>
+            ↻ <span>अगला कपड़ों का मेल</span>
+          </button>
+          <button id="saveButton" class="secondary-button" type="button" disabled>
+            ♡ <span>इस लुक को सेव करो</span>
+          </button>
+          <small id="saveHint" class="save-hint">पहले लुक बनाओ; फिर इसे सेव कर पाओगे।</small>
+          <p id="saveMessage" class="save-message" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="saved-section wardrobe-section">
+        <div class="saved-heading">
+          <div>
+            <p class="eyebrow">MY CLOSET</p>
+            <h2>मेरी अलमारी</h2>
+          </div>
+          <span id="wardrobeCount" class="count-badge">0</span>
+        </div>
+
+        <form id="wardrobeForm" class="wardrobe-form">
+          <div class="wardrobe-category-field">
+            <label for="wardrobeCategory">कपड़े की category</label>
+            <select id="wardrobeCategory" name="category" required>
+              <option value="top">शर्ट / टॉप</option>
+              <option value="bottom">पैंट</option>
+              <option value="shorts">शॉर्ट्स</option>
+              <option value="saree">साड़ी</option>
+              <option value="salwar">सलवार-सूट</option>
+              <option value="lehenga">लहंगा</option>
+              <option value="kurti">कुर्ती</option>
+              <option value="shoes">जूते</option>
+              <option value="accessory">घड़ी / बेल्ट / बैग</option>
+            </select>
+          </div>
+          <div>
+            <label for="wardrobeName">कपड़े का नाम (वैकल्पिक)</label>
+            <input id="wardrobeName" type="text" maxlength="60"
+                   placeholder="जैसे: ऑक्सफ़ोर्ड शर्ट">
+            <small id="wardrobeNameHint">AI हर फोटो का नाम अपने-आप रखेगा; एक फोटो के लिए चाहें तो अपना नाम लिखें।</small>
+          </div>
+
+          <div>
+            <label for="wardrobeAudience">किसकी अलमारी?</label>
+            <select id="wardrobeAudience" required>
+              <option value="men">पुरुष</option>
+              <option value="women">महिला</option>
+              <option value="children">बच्चे</option>
+              <option value="senior">बुज़ुर्ग</option>
+              <option value="all">सबके लिए</option>
+            </select>
+          </div>
+
+
+          <div>
+            <label for="wardrobeParty">पार्टी का नाम चुनें</label>
+            <select id="wardrobeParty">
+              <option value="any">सभी पार्टियाँ</option>
+              <option value="wedding">शादी की पार्टी</option>
+              <option value="birthday">बर्थडे पार्टी</option>
+              <option value="casual">कैज़ुअल पार्टी</option>
+              <option value="night">नाइट पार्टी</option>
+            </select>
+          </div>
+
+          <div class="wardrobe-image-field">
+            <label for="wardrobeImage">कपड़े की फोटो (एक से ज़्यादा चुन सकते हैं)</label>
+            <input id="wardrobeImage" name="image" type="file" multiple
+            <label for="wardrobeCamera" style="display:block; text-align:center; background:#e75480; color:white; padding:12px; border-radius:10px; cursor:pointer; margin-top:10px;">
+  📷 Camera se photo lo
+         </label>
+<input id="wardrobeCamera" type="file" accept="image/*" capture="environment" hidden>
+            accept="image/jpeg,image/png,image/webp">
+            <small id="wardrobeImageHint">एक साथ कई फोटो चुनें। AI हर फोटो का नाम और category पहचानेगा; बंद करने पर फ़ाइल का नाम और ऊपर चुनी category इस्तेमाल होगी।</small>
+            <label class="wardrobe-ai-toggle" for="wardrobeAiIdentify">
+              <input id="wardrobeAiIdentify" type="checkbox" checked>
+              <span id="wardrobeAiIdentifyText">फोटो देखकर नाम और category अपने-आप पहचानें</span>
+            </label>
+            <small id="wardrobeAiPrivacy">AI पहचान के लिए चुनी गई फोटो Groq API को भेजी जाएगी।</small>
+            <small id="wardrobeImageCount" class="wardrobe-photo-count" hidden></small>
+            <small id="wardrobePhotoNote" class="wardrobe-photo-note">
+              चुनी गई फोटो तुम्हारी अलमारी में सेव होंगी और लुक में दिखाई देंगी।
+            </small>
+            <div id="wardrobeImagePreviewBox" class="wardrobe-image-preview" hidden>
+              <img id="wardrobeImagePreview" alt="कपड़ों की फोटो की झलक">
+              <button id="removeWardrobeImage" type="button" class="text-button">
+                फोटो हटाएँ
+              </button>
+            </div>
+          </div>
+
+          <button class="primary-button" type="submit">＋ अलमारी में जोड़ो</button>
+        </form>
+
+        <p id="wardrobeMessage" class="save-message" aria-live="polite"></p>
+        <label class="wardrobe-search-label" for="wardrobeSearch">अलमारी में कपड़ा खोजें</label>
+        <input id="wardrobeSearch" class="wardrobe-search"
+               type="search" placeholder="शर्ट, पैंट, जूते, घड़ी…" autocomplete="off">
+        <p id="wardrobeSearchEmpty" class="empty-history" hidden>
+          इस नाम से अलमारी में कोई कपड़ा नहीं मिला।
+        </p>
+        <details class="catalog-details">
+          <summary>पार्टी आउटफिट प्लानर का sample कपड़ों का catalog देखें</summary>
+          <p class="catalog-privacy-note">
+            ये app के अंदर के sample नाम और category हैं, web से खोजी गई तस्वीरें नहीं।
+            लुक में सिर्फ वही items आएँगे जो तुमने अपनी अलमारी में जोड़े हैं।
+          </p>
+          <div id="builtinCatalog" class="builtin-catalog"></div>
+          <button id="addSampleWardrobe" class="secondary-button" type="button">
+            ＋ <span>पूरी sample अलमारी जोड़ें</span>
+          </button>
+        </details>
+        <div id="wardrobeList" class="history-list"></div>
+        <p id="emptyWardrobe" class="empty-history">
+          अभी अलमारी खाली है। ऊपर से अपने कपड़े जोड़ो।
+        </p>
+      </section>
+
+      <section class="saved-section">
+        <div class="saved-heading">
+          <div>
+            <p class="eyebrow">YOUR COLLECTION</p>
+            <h2>सेव किए हुए लुक</h2>
+          </div>
+          <span id="historyCount" class="count-badge">0</span>
+        </div>
+        <div id="historyList" class="history-list"></div>
+        <p id="emptyHistory" class="empty-history">
+          अभी कोई लुक सेव नहीं है। अपना पहला लुक बनाकर सेव करो।
+        </p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>PARTY OUTFIT PLANNER</span>
+      <span>हर पार्टी के लिए, तुम्हारा अपना स्टाइल।</span>
+    </footer>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}?v=20261113-08"></script>
+
+<script>
+  const mainInput = document.getElementById('wardrobeImage');
+  document.getElementById('wardrobeCamera').addEventListener('change', function(){
+    const dt = new DataTransfer();
+    for(let f of mainInput.files) dt.items.add(f);
+    for(let f of this.files) dt.items.add(f);
+    mainInput.files = dt.files;
+    mainInput.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+</script>
+</body>
+</html>
